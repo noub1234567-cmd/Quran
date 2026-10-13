@@ -55,9 +55,9 @@
 const COUNTS=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
 const NAMES="الفاتحة،البقرة،آل عمران،النساء،المائدة،الأنعام،الأعراف،الأنفال،التوبة،يونس،هود،يوسف،الرعد،إبراهيم،الحجر،النحل،الإسراء،الكهف،مريم،طه،الأنبياء،الحج،المؤمنون،النور،الفرقان،الشعراء،النمل،القصص،العنكبوت،الروم،لقمان،السجدة،الأحزاب،سبأ،فاطر،يس،الصافات،ص،الزمر،غافر،فصلت،الشورى،الزخرف،الدخان،الجاثية،الأحقاف،محمد،الفتح،الحجرات،ق،الذاريات،الطور،النجم،القمر،الرحمن،الواقعة،الحديد،المجادلة،الحشر،الممتحنة،الصف،الجمعة،المنافقون،التغابن،الطلاق،التحريم،الملك،القلم،الحاقة،المعارج،نوح،الجن،المزمل،المدثر،القيامة،الإنسان،المرسلات،النبأ،النازعات،عبس،التكوير،الانفطار،المطففين،الانشقاق،البروج،الطارق،الأعلى،الغاشية،الفجر،البلد،الشمس،الليل،الضحى،الشرح،التين،العلق،القدر،البينة،الزلزلة،العاديات،القارعة،التكاثر،العصر،الهمزة،الفيل،قريش،الماعون،الكوثر،الكافرون،النصر،المسد،الإخلاص،الفلق،الناس".split("،");
 const OFFSET=[];let acc=0;COUNTS.forEach(c=>{OFFSET.push(acc);acc+=c;});
-const BASE='https://cdn.islamic.network/quran/audio/128/ar.alafasy/';
+const BASES=['https://cdn.islamic.network/quran/audio/128/ar.alafasy/','https://cdn.islamic.app/quran/audio/ar.alafasy/'];
 const CACHE_NAME='ayah-audio';
-const urlOf=(s,a)=>BASE+(OFFSET[s-1]+a)+'.mp3';
+const urlOf=(s,a,i=0)=>BASES[i]+(OFFSET[s-1]+a)+'.mp3';
 
 const $=id=>document.getElementById(id);
 const player=$('player'),statusEl=$('status');
@@ -119,16 +119,23 @@ async function run(s,from,to,reps){
 function playAyah(s,a){
   return new Promise(async res=>{
     pendingResolve=res;
-    const remote=urlOf(s,a);let src=remote,obj=null;
+    const key=urlOf(s,a,0);let obj=null,cached=false;
+    const srcs=[];
     try{
-      const c=await caches.open(CACHE_NAME),hit=await c.match(remote);
-      if(hit){obj=URL.createObjectURL(await hit.blob());src=obj;}
+      const c=await caches.open(CACHE_NAME),hit=await c.match(key);
+      if(hit){obj=URL.createObjectURL(await hit.blob());srcs.push(obj);cached=true;}
     }catch(e){}
+    for(let i=0;i<BASES.length;i++)srcs.push(urlOf(s,a,i));
+    let k=0;
     const finish=v=>{player.onended=player.onerror=null;if(obj)URL.revokeObjectURL(obj);pendingResolve=null;res(v);};
-    player.onended=()=>finish(true);
-    player.onerror=()=>finish(false);
-    player.src=src;
-    player.play().catch(()=>finish(false));
+    const tryNext=()=>{
+      if(k>=srcs.length)return finish(false);
+      player.onended=()=>finish(true);
+      player.onerror=()=>{k++;tryNext();};
+      player.src=srcs[k];
+      player.play().catch(()=>{k++;tryNext();});
+    };
+    tryNext();
   });
 }
 
@@ -146,15 +153,21 @@ async function downloadSurah(s,btn){
     const c=await caches.open(CACHE_NAME),n=COUNTS[s-1];
     for(let a=1;a<=n;a++){
       btn.textContent=`${a}/${n}`;
-      const u=urlOf(s,a);
-      if(await c.match(u))continue;
-      const r=await fetch(u);
-      if(!r.ok)throw new Error('http '+r.status);
-      await c.put(u,r);
+      const key=urlOf(s,a,0);
+      if(await c.match(key))continue;
+      let ok=false,last='';
+      for(let i=0;i<BASES.length&&!ok;i++){
+        try{
+          const r=await fetch(urlOf(s,a,i));
+          if(!r.ok){last='http '+r.status;continue;}
+          await c.put(key,r);ok=true;
+        }catch(err){last=String(err&&err.message||err);}
+      }
+      if(!ok)throw new Error(last);
     }
     downloaded.add(s);localStorage.setItem('dl',JSON.stringify([...downloaded]));
   }catch(e){
-    alert('تعذّر إكمال التحميل. تأكد من الإنترنت وحاول مرة أخرى.');
+    alert('تعذّر إكمال التحميل.\nالسبب التقني: '+(e&&e.message||e));
   }
   btn.disabled=false;refreshDl();
 }
