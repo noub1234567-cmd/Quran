@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>اختبار FastConformer Quran INT8</title>
+<style>
+body{font-family:system-ui,Arial,sans-serif;max-width:760px;margin:auto;padding:18px;line-height:1.7;background:#f7f8fa;color:#17202a}
+.card{background:white;border:1px solid #ddd;border-radius:14px;padding:16px;margin:12px 0}
+button{padding:11px 15px;border:0;border-radius:9px;background:#176b4d;color:white;font-size:16px;margin:4px}
+button:disabled{opacity:.5}
+input,textarea{max-width:100%;font-size:16px}
+textarea{width:100%;min-height:75px;box-sizing:border-box}
+#status{white-space:pre-wrap;background:#eef5f1;padding:12px;border-radius:9px}
+.small{font-size:13px;color:#555}
+</style>
+</head>
+<body>
+<h2>اختبار FastConformer Quran INT8</h2>
+<div class="card">
+<p><b>مهم:</b> هذه صفحة اختبار تجريبية. يتم تشغيل النموذج في المتصفح، لكن تنزيل النموذج أول مرة يتطلب الإنترنت. لن يُرفع تسجيلك إلى خادم التعرف على الكلام.</p>
+<p class="small">النموذج: voidwaveDev/fastconformer-quran — الترخيص CC-BY-4.0.</p>
+<button id="load">تحميل النموذج وتشغيله</button>
+<div id="status">لم يتم تحميل النموذج بعد.</div>
+</div>
+<div class="card">
+<h3>مصدر الصوت</h3>
+<button id="record">بدء التسجيل</button>
+<button id="stop" disabled>إيقاف التسجيل</button>
+<p>أو اختر ملفًا صوتيًا:</p>
+<input id="file" type="file" accept="audio/*">
+<p class="small">يفضل تسجيل قصير (5–15 ثانية) في مكان هادئ. امنح المتصفح إذن الميكروفون عند الطلب.</p>
+</div>
+<div class="card">
+<button id="transcribe" disabled>التعرف على التلاوة</button>
+<h3>النص المتعرف عليه</h3>
+<textarea id="result" readonly placeholder="ستظهر النتيجة هنا"></textarea>
+<p id="timing"></p>
+</div>
+<div class="card">
+<h3>تنبيه</h3>
+<p>هذا اختبار تقني أولي وليس مصحح تجويد. قد لا تعمل عملية فك الرموز بصورة صحيحة على جميع المتصفحات أو الأجهزة، وقد تظهر رسالة خطأ. لا تعتمد عليه للحكم على صحة التلاوة قبل التحقق من النتائج.</p>
+</div>
+<script type="module">
+const $ = id => document.getElementById(id);
+const BASE = 'https://huggingface.co/voidwaveDev/fastconformer-quran/resolve/main/';
+let ort, encoder, decoder, tokens=[], samples=null, sampleRate=16000, mediaRecorder, chunks=[];
+function status(s){$('status').textContent=s}
+async function getBuffer(url){
+  const r=await fetch(url);
+  if(!r.ok) throw new Error('تعذر تنزيل '+url+' ('+r.status+').');
+  return await r.arrayBuffer();
+}
+$('load').onclick=async()=>{
+  $('load').disabled=true; status('جارٍ تحميل محرك ONNX Runtime...');
+  try{
+    ort=await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.min.js');
+    ort.env.wasm.numThreads=1;
+    status('جارٍ تحميل المشفّر (حوالي 132 ميغابايت). اترك الصفحة مفتوحة...');
+    const encBuf=await getBuffer(BASE+'encoder.int8.onnx');
+    status('تم تنزيل المشفّر. جارٍ تحميل المفكّك...');
+    const decBuf=await getBuffer(BASE+'decoder.int8.onnx');
+    const tokText=new TextDecoder().decode(await getBuffer(BASE+'tokens.txt'));
+    tokens=tokText.split(/\r?\n/).map(x=>x.trim().split(/\s+/).slice(1).join(' ')||x.trim());
+    // Many token files are "token id" or "id token"; normalize common formats.
+    tokens=tokText.split(/\r?\n/).map(line=>{
+      const m=line.trim().match(/^(.*?)\s+(\d+)$/);
+      if(m) return m[1];
+      const n=line.trim().match(/^(\d+)\s+(.*)$/);
+      if(n) return n[2];
+      return line.trim();
+    });
+    encoder=await ort.InferenceSession.create(encBuf,{executionProviders:['wasm']});
+    decoder=await ort.InferenceSession.create(decBuf,{executionProviders:['wasm']});
+    status('تم تحميل ملفات النموذج. إذا ظهرت مشكلة في استخراج الميزات أو فك الرموز فهذه نسخة اختبار أولية.');
+    $('transcribe').disabled=false;
+  }catch(e){status('فشل التحميل: '+e.message+'\nتحقق من الاتصال بالإنترنت ثم أعد المحاولة.');$('load').disabled=false;}
+};
+function resample(input, from, to=16000){
+  if(from===to) return input;
+  const ratio=from/to, outLen=Math.floor(input.length/ratio), out=new Float32Array(outLen);
+  for(let i=0;i<outLen;i++){const pos=i*ratio, idx=Math.floor(pos), frac=pos-idx;out[i]=(input[idx]||0)*(1-frac)+(input[idx+1]||0)*frac;}
+  return out;
+}
+async function decodeFile(file){
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  const ab=await file.arrayBuffer(), buf=await ctx.decodeAudioData(ab);
+  const ch=buf.numberOfChannels, mono=new Float32Array(buf.length);
+  for(let c=0;c<ch;c++){const d=buf.getChannelData(c);for(let i=0;i<d.length;i++)mono[i]+=d[i]/ch;}
+  const out=resample(mono,buf.sampleRate); await ctx.close(); return out;
+}
+$('file').onchange=async e=>{
+  const f=e.target.files?.[0]; if(!f)return;
+  try{status('جارٍ تجهيز الملف الصوتي...');samples=await decodeFile(f);status(`تم تجهيز الصوت (${(samples.length/16000).toFixed(1)} ثانية).`);}
+  catch(err){status('تعذر قراءة الصوت: '+err.message);}
+};
+$('record').onclick=async()=>{
+ try{
+  const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  chunks=[];mediaRecorder=new MediaRecorder(stream);
+  mediaRecorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  mediaRecorder.onstop=async()=>{
+    stream.getTracks().forEach(t=>t.stop());
+    const blob=new Blob(chunks,{type:mediaRecorder.mimeType||'audio/webm'});
+    try{samples=await decodeFile(blob);status(`انتهى التسجيل (${(samples.length/16000).toFixed(1)} ثانية).`);}
+    catch(err){status('تعذر تجهيز التسجيل: '+err.message);}
+  };
+  mediaRecorder.start();$('record').disabled=true;$('stop').disabled=false;status('جارٍ التسجيل...');
+ }catch(e){status('لم يمكن الوصول إلى الميكروفون. افتح الصفحة عبر HTTPS واسمح باستخدام الميكروفون.');}
+};
+$('stop').onclick=()=>{if(mediaRecorder&&mediaRecorder.state!=='inactive')mediaRecorder.stop();$('record').disabled=false;$('stop').disabled=true;};
+function hzToMel(f){return 2595*Math.log10(1+f/700)}
+function melToHz(m){return 700*(10**(m/2595)-1)}
+function fftReIm(x){
+ const n=x.length,re=Float64Array.from(x),im=new Float64Array(n);
+ for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){[re[i],re[j]]=[re[j],re[i]];}}
+ for(let len=2;len<=n;len<<=1){const ang=-2*Math.PI/len,wpr=Math.cos(ang),wpi=Math.sin(ang);
+  for(let i=0;i<n;i+=len){let wr=1,wi=0;for(let j=0;j<len/2;j++){const u=i+j,v=i+j+len/2;const vr=re[v]*wr-im[v]*wi,vi=re[v]*wi+im[v]*wr;re[v]=re[u]-vr;im[v]=im[u]-vi;re[u]+=vr;im[u]+=vi;const nwr=wr*wpr-wi*wpi;wi=wr*wpi+wi*wpr;wr=nwr;}}
+ }return {re,im};
+}
+function makeFeatures(audio){
+ const sr=16000,nfft=512,win=400,hop=160,nMels=80;
+ const nFrames=Math.max(1,Math.floor((audio.length-win)/hop)+1);
+ const melMin=hzToMel(0),melMax=hzToMel(sr/2),edges=[];
+ for(let i=0;i<nMels+2;i++)edges.push(melToHz(melMin+(melMax-melMin)*i/(nMels+1)));
+ const bins=edges.map(f=>Math.floor((nfft+1)*f/sr));
+ const filters=[];
+ for(let m=0;m<nMels;m++){const w=new Float32Array(nfft/2+1),l=bins[m],c=bins[m+1],r=bins[m+2];
+  for(let k=l;k<c&&k<w.length;k++)w[k]=(k-l)/Math.max(1,c-l);
+  for(let k=c;k<r&&k<w.length;k++)w[k]=(r-k)/Math.max(1,r-c);
+  filters.push(w);
+ }
+ const feats=Array.from({length:nMels},()=>new Float32Array(nFrames));
+ for(let t=0;t<nFrames;t++){
+  const frame=new Float64Array(nfft);
+  for(let i=0;i<win;i++){const v=audio[t*hop+i]||0;frame[i]=v*(0.5-0.5*Math.cos(2*Math.PI*i/(win-1)));}
+  const {re,im}=fftReIm(frame),pow=new Float64Array(nfft/2+1);
+  for(let k=0;k<pow.length;k++)pow[k]=(re[k]*re[k]+im[k]*im[k])/nfft;
+  for(let m=0;m<nMels;m++){let sum=0;for(let k=0;k<pow.length;k++)sum+=pow[k]*filters[m][k];feats[m][t]=Math.log(sum+Math.pow(2,-24));}
+ }
+ // Per-feature normalization, noted as required by the model card.
+ for(let m=0;m<nMels;m++){let mean=0;for(const v of feats[m])mean+=v;mean/=nFrames;let variance=0;for(const v of feats[m])variance+=(v-mean)**2;const sd=Math.sqrt(variance/nFrames)+1e-5;for(let t=0;t<nFrames;t++)feats[m][t]=(feats[m][t]-mean)/sd;}
+ const data=new Float32Array(nMels*nFrames);
+ for(let m=0;m<nMels;m++)data.set(feats[m],m*nFrames);
+ return {data,frames:nFrames};
+}
+function argmax(a){let ix=0;for(let i=1;i<a.length;i++)if(a[i]>a[ix])ix=i;return ix;}
+$('transcribe').onclick=async()=>{
+ if(!encoder||!decoder||!samples){status('حمّل النموذج واختر ملفًا صوتيًا أو سجّل تلاوة أولًا.');return;}
+ $('transcribe').disabled=true;$('result').value='';const start=performance.now();
+ try{
+  status('جارٍ استخراج الميزات الصوتية...');
+  const f=makeFeatures(samples), feeds={};
+  const ein=encoder.inputNames;
+  feeds[ein.find(n=>n.includes('audio_signal'))||ein[0]]=new ort.Tensor('float32',f.data,[1,80,f.frames]);
+  feeds[ein.find(n=>n.includes('length'))||ein[1]]=new ort.Tensor('int64',BigInt64Array.of(BigInt(f.frames)),[1]);
+  status('جارٍ تشغيل النموذج محليًا. قد يستغرق ذلك وقتًا على الهاتف...');
+  const eo=await encoder.run(feeds);
+  const enc=eo[encoder.outputNames.find(n=>n.includes('encoded'))||encoder.outputNames[0]];
+  const encLenTensor=eo[encoder.outputNames.find(n=>n.includes('encoded_lengths'))];
+  const T=encLenTensor?Number(encLenTensor.data[0]):Math.floor(f.frames/8);
+  const outs=decoder.outputNames, ins=decoder.inputNames;
+  let state1=new Float32Array(640),state2=new Float32Array(640),prev=0,ids=[];
+  const blank=1024, encData=enc.data;
+  for(let t=0;t<T;t++){
+    const frame=new Float32Array(512);
+    for(let c=0;c<512;c++)frame[c]=encData[c*T+t];
+    const dfeeds={};
+    for(const name of ins){
+      if(name==='encoder_outputs')dfeeds[name]=new ort.Tensor('float32',frame,[1,512,1]);
+      else if(name==='targets')dfeeds[name]=new ort.Tensor('int64',BigInt64Array.of(BigInt(prev)),[1,1]);
+      else if(name==='target_length')dfeeds[name]=new ort.Tensor('int64',BigInt64Array.of(1n),[1]);
+      else if(name==='input_states_1')dfeeds[name]=new ort.Tensor('float32',state1,[1,1,640]);
+      else if(name==='input_states_2')dfeeds[name]=new ort.Tensor('float32',state2,[1,1,640]);
+      else throw new Error('مدخل غير معروف في المفكّك: '+name);
+    }
+    const d=await decoder.run(dfeeds);
+    const logits=d[outs.find(n=>n.toLowerCase().includes('logits'))||outs[0]].data;
+    const id=argmax(logits);
+    const s1=d[outs.find(n=>n.includes('states_1'))],s2=d[outs.find(n=>n.includes('states_2'))];
+    if(s1)state1=Float32Array.from(s1.data);if(s2)state2=Float32Array.from(s2.data);
+    if(id!==blank&&id!==prev){ids.push(id);prev=id;}else if(id===blank){prev=blank;}
+    if(t%30===0)status(`جارٍ فك الرموز... ${t}/${T}`);
+  }
+  let text='';
+  for(const id of ids){if(tokens[id]!==undefined)text+=tokens[id];}
+  $('result').value=text||'لم ينتج النموذج نصًا. قد يلزم ضبط طريقة فك الرموز/استخراج الميزات.';
+  $('timing').textContent=`الزمن الإجمالي: ${((performance.now()-start)/1000).toFixed(1)} ثانية.`;
+  status('انتهى الاختبار. راجع النص بعناية؛ هذه نسخة تجريبية.');
+ }catch(e){status('حدث خطأ أثناء التشغيل: '+e.message+'\nلم يتم إرسال الصوت إلى خادم التعرف. أرسل لي نص الخطأ أو صورة منه لنصلحه.');}
+ finally{$('transcribe').disabled=false;}
+};
+</script>
+</body>
+</html>
