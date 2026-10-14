@@ -46,18 +46,27 @@ const $ = id => document.getElementById(id);
 const BASE = 'https://huggingface.co/voidwaveDev/fastconformer-quran/resolve/main/';
 let ort, encoder, decoder, tokens=[], samples=null, sampleRate=16000, mediaRecorder, chunks=[];
 async function loadOrtRuntime(){
-  if(window.ort) { ort=window.ort; return ort; }
-  await new Promise((resolve,reject)=>{
-    const script=document.createElement('script');
-    script.src='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js';
-    script.onload=resolve; script.onerror=()=>reject(new Error('تعذر تحميل مكتبة ONNX Runtime من CDN.'));
-    document.head.appendChild(script);
-  });
-  if(!window.ort) throw new Error('تم تنزيل المكتبة لكن لم يتم العثور على واجهة ONNX Runtime.');
-  ort=window.ort;
-  // Explicitly point the WASM loader at the matching files from the same release.
-  ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';
+  // Load a pinned classic UMD build. Do not trust a pre-existing global unless
+  // it exposes the expected ONNX Runtime Web API.
+  const valid = x => !!(x && x.InferenceSession && x.Tensor && x.env && x.env.wasm);
+  if(valid(window.ort)) { ort=window.ort; }
+  else {
+    if(window.ort) { try { delete window.ort; } catch(_) {} }
+    await new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js';
+      script.async=true;
+      script.onload=resolve;
+      script.onerror=()=>reject(new Error('تعذر تحميل مكتبة ONNX Runtime Web. تحقق من الإنترنت أو جرّب متصفح Chrome.'));
+      document.head.appendChild(script);
+    });
+    if(!valid(window.ort)) throw new Error('تم تحميل ملف المكتبة، لكن واجهة ONNX Runtime Web غير مكتملة. أعد تحميل الصفحة أو جرّب Chrome.');
+    ort=window.ort;
+  }
+  // Pin WASM assets to the exact same version as the JS bundle.
+  ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
   ort.env.wasm.numThreads=1;
+  ort.env.wasm.proxy=false;
   return ort;
 }
 function status(s){$('status').textContent=s}
@@ -88,7 +97,7 @@ $('load').onclick=async()=>{
     decoder=await ort.InferenceSession.create(decBuf,{executionProviders:['wasm']});
     status('تم تحميل ملفات النموذج. إذا ظهرت مشكلة في استخراج الميزات أو فك الرموز فهذه نسخة اختبار أولية.');
     $('transcribe').disabled=false;
-  }catch(e){status('فشل التحميل: '+e.message+'\nتحقق من الاتصال بالإنترنت ثم أعد المحاولة.');$('load').disabled=false;}
+  }catch(e){status('فشل التحميل: '+e.message+'\nلم يُرسل الصوت إلى أي خادم. تحقق من الإنترنت ثم أعد تحميل الصفحة.');$('load').disabled=false;}
 };
 function resample(input, from, to=16000){
   if(from===to) return input;
