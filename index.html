@@ -7,6 +7,9 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <title>حفظ القرآن</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:system-ui,"Segoe UI",Tahoma,sans-serif;background:#f0f7f6;color:#10312e;padding-bottom:90px}
@@ -33,10 +36,25 @@
   #status{flex:1;font-size:14px}
   #stop{background:#e11d48;color:#fff;padding:8px 16px}
   #note{font-size:12px;color:#5b7a77;margin:12px;text-align:center}
+  .tabs{display:flex;background:#0d625b}
+  .tabs button{flex:1;background:none;color:#cfeeea;border-radius:0;padding:12px}
+  .tabs button.on{background:#f0f7f6;color:#0f766e;font-weight:700}
+  .quranText{font-family:'Amiri Quran','Amiri','Scheherazade New',serif;font-size:26px;line-height:2.3;text-align:right;position:relative;max-height:45vh;overflow:auto;padding:6px}
+  .ay{border-radius:8px;padding:2px 3px}
+  .ay.cur{background:#ffe9a8}
+  .mk{color:#0f766e;font-size:20px}
+  #ayahBox[data-mode=hide] .t{display:none}
+  #ayahBox[data-mode=cur] .ay:not(.cur){display:none}
+  .blank{display:inline-block;border-bottom:2px dotted #0f766e;height:1em;vertical-align:baseline;margin:0 3px}
+  .ok{background:#d9f3e4;color:#14633a}
+  .bad{background:#fde8ec;color:#e11d48}
+  main[hidden],.card[hidden]{display:none}
 </style>
 </head>
 <body>
 <header>حفظ القرآن</header>
+<div class="tabs"><button id="tab1" class="on">التكرار والتسجيل</button><button id="tab2">القراءة والاختبار</button></div>
+<main id="v1">
 
 <div class="card">
   <h2>التكرار للحفظ</h2>
@@ -57,6 +75,14 @@
   </div>
   <button class="primary" id="go">▶ ابدأ التكرار</button>
   <p class="hint">«الفاصل» وقت صامت بعد كل آية لتردد أنت. ويُحفظ آخر موضع تلقائياً.</p>
+</div>
+
+<div class="card">
+  <h2>النص</h2>
+  <label for="txt">عرض النص</label>
+  <select id="txt"><option value="show">ظاهر</option><option value="cur">الآية الجارية فقط</option><option value="hide">مخفي (للحفظ)</option></select>
+  <p class="hint textMsg"></p>
+  <div id="ayahBox" class="quranText" data-mode="show"></div>
 </div>
 
 <div class="card">
@@ -89,6 +115,53 @@
 <div class="list" id="list"></div>
 <p id="note">الصوت: مشاري العفاسي. ★ لتعليم السورة المحفوظة، و«تحميل» لتعمل دون إنترنت.</p>
 
+</main>
+
+<main id="v2" hidden>
+  <div class="card">
+    <h2>القراءة والاختبار</h2>
+    <label for="tSurah">السورة</label>
+    <select id="tSurah"></select>
+    <div class="row">
+      <div><label for="tFrom">من آية</label><input id="tFrom" type="number" min="1" value="1" inputmode="numeric"></div>
+      <div><label for="tTo">إلى آية</label><input id="tTo" type="number" min="1" value="7" inputmode="numeric"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="alt" id="mRead">📖 قراءة</button>
+      <button class="alt" id="mTest">❓ اختبار</button>
+    </div>
+    <p class="hint textMsg"></p>
+  </div>
+
+  <div class="card" id="readCard">
+    <div id="readBox" class="quranText"></div>
+    <p class="hint">اضغط على أي آية لتسمعها.</p>
+  </div>
+
+  <div class="card" id="testCard" hidden>
+    <label for="qType">نوع الاختبار</label>
+    <select id="qType">
+      <option value="first">تلميح أول كلمة فقط</option>
+      <option value="hideStart">إخفاء بداية الآية</option>
+      <option value="hideMid">إخفاء وسط الآية</option>
+      <option value="hideEnd">إخفاء نهاية الآية</option>
+      <option value="random">عشوائي</option>
+    </select>
+    <button class="primary" id="qNew">سؤال جديد</button>
+    <div id="qBox" class="quranText" style="margin-top:10px"></div>
+    <div class="row">
+      <button class="alt" id="qHear">▶ استمع</button>
+      <button class="alt" id="qHint">كشف كلمة</button>
+      <button class="alt" id="qShow">كشف الإجابة</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="alt ok" id="qOk">✓ تذكرت</button>
+      <button class="alt bad" id="qBad">✗ لم أتذكر</button>
+    </div>
+    <p class="hint" id="qScore"></p>
+  </div>
+</main>
+
 <div id="bar"><div id="status">اضغط على سورة للاستماع</div><button id="stop">إيقاف</button></div>
 <audio id="player" preload="auto"></audio>
 
@@ -113,7 +186,7 @@ const load=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==nul
 const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
 let downloaded=new Set(load('dl',[]));
 let memorized=new Set(load('mem',[]));
-let cfg=load('cfg',{gap:'0',speed:'1'});
+let cfg=Object.assign({gap:'0',speed:'1',txt:'show'},load('cfg',{}));
 let last=load('last',null);
 
 // ---- تخزين التسجيلات (IndexedDB) ----
@@ -144,6 +217,78 @@ const recAll=async()=>{
 };
 const keyOf=(s,a)=>s+':'+a;
 
+// ---- نص القرآن ----
+let TEXT=null;
+const norm=t=>t.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g,'').replace(/\u0671/g,'\u0627');
+const ar=n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
+function buildText(j){
+  const out=COUNTS.map(()=>[]);
+  const put=(s,a,t)=>{if(s>=1&&s<=114&&a>=1&&typeof t==='string')out[s-1][a-1]=t;};
+  if(j&&j.data&&j.data.surahs){j.data.surahs.forEach(su=>su.ayahs.forEach(ay=>put(su.number,ay.numberInSurah,ay.text)));}
+  else if(j&&j.ayahs){j.ayahs.forEach(ay=>{const p=String(ay.verse_key).split(':').map(Number);put(p[0],p[1],ay.text);});}
+  else if(j&&j.verses){j.verses.forEach(v=>{const p=String(v.verse_key).split(':').map(Number);put(p[0],p[1],v.text_uthmani||v.text);});}
+  else return null;
+  for(let i=0;i<114;i++){if(out[i].length!==COUNTS[i]||out[i].some(x=>!x))return null;}
+  for(let sn=2;sn<=114;sn++){
+    if(sn===9)continue;
+    const w=out[sn-1][0].split(' ');
+    if(w.length>4&&norm(w[0])==='بسم'&&norm(w[1])==='الله')out[sn-1][0]=w.slice(4).join(' ');
+  }
+  return out;
+}
+async function loadTextCache(){
+  try{const c=await caches.open('qtext'),r=await c.match('text-v1');if(r){const t=await r.json();if(t&&t.length===114)TEXT=t;}}catch(e){}
+}
+async function fetchText(btn){
+  const urls=['https://api.alquran.cloud/v1/quran/quran-uthmani','https://api.islamic.app/v1/quran/verses/uthmani','https://api.quran.com/api/v4/quran/verses/uthmani'];
+  const errs=[];
+  if(btn){btn.disabled=true;btn.textContent='جارٍ التحميل...';}
+  for(let i=0;i<urls.length;i++){
+    try{
+      const r=await fetch(urls[i]);
+      if(!r.ok){errs.push(i+':http '+r.status);continue;}
+      const t=buildText(await r.json());
+      if(!t){errs.push(i+':صيغة غير متوقعة');continue;}
+      TEXT=t;
+      try{const c=await caches.open('qtext');await c.put('text-v1',new Response(JSON.stringify(t)));}catch(e){}
+      onTextReady();return true;
+    }catch(err){errs.push(i+':'+String(err&&err.message||err));}
+  }
+  alert('تعذّر تحميل النص.\nالسبب التقني: '+errs.join(' | '));
+  updateTextMsgs();
+  return false;
+}
+function updateTextMsgs(){
+  document.querySelectorAll('.textMsg').forEach(el=>{
+    if(TEXT){el.style.display='none';return;}
+    el.style.display='';
+    el.innerHTML='نص القرآن غير محمّل. <button class="alt loadText" style="flex:none;padding:8px 12px">تحميل النص (مرة واحدة)</button>';
+  });
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.loadText');if(b)fetchText(b);});
+function renderRange(box,sn,from,to){
+  if(!TEXT){box.innerHTML='';return;}
+  const parts=[];
+  for(let a=from;a<=to;a++){
+    parts.push(`<span class="ay" data-a="${a}"><span class="t">${TEXT[sn-1][a-1]}</span> <span class="mk">﴿${ar(a)}﴾</span> </span>`);
+  }
+  box.innerHTML=parts.join('');
+}
+function renderMainText(sn,f,t){renderRange($('ayahBox'),sn,f,t);$('ayahBox').dataset.mode=cfg.txt;}
+function renderMainFromInputs(){
+  const sn=+$('surah').value,max=COUNTS[sn-1];
+  let f=Math.max(1,+$('from').value||1),t=Math.min(max,+$('to').value||max);
+  if(f>t)[f,t]=[t,f];
+  renderMainText(sn,f,t);
+}
+function highlight(a){
+  const box=$('ayahBox');
+  box.querySelectorAll('.ay.cur').forEach(e=>e.classList.remove('cur'));
+  const el=box.querySelector('.ay[data-a="'+a+'"]');
+  if(el){el.classList.add('cur');box.scrollTop=Math.max(0,el.offsetTop-box.clientHeight/3);}
+}
+function onTextReady(){updateTextMsgs();renderMainFromInputs();renderRead();}
+
 // ---- واجهة ----
 NAMES.forEach((n,i)=>{
   const o=document.createElement('option');o.value=i+1;o.textContent=(i+1)+' - '+n;$('surah').appendChild(o);
@@ -161,10 +306,12 @@ function refreshMem(){
   document.querySelectorAll('.mem').forEach(b=>{b.textContent=memorized.has(+b.dataset.s)?'★':'☆';});
 }
 refreshDl();refreshMem();
-function setRange(s){$('surah').value=s;$('from').value=1;$('to').value=COUNTS[s-1];$('ay').value=1;refreshRecInfo();}
+function setRange(s){$('surah').value=s;$('from').value=1;$('to').value=COUNTS[s-1];$('ay').value=1;refreshRecInfo();renderMainFromInputs();}
 $('surah').onchange=()=>setRange(+$('surah').value);
 
-$('gap').value=cfg.gap;$('speed').value=cfg.speed;
+$('gap').value=cfg.gap;$('speed').value=cfg.speed;$('txt').value=cfg.txt;
+$('txt').onchange=()=>{cfg.txt=$('txt').value;save('cfg',cfg);$('ayahBox').dataset.mode=cfg.txt;};
+$('from').onchange=$('to').onchange=()=>renderMainFromInputs();
 function applySpeed(){const r=+$('speed').value||1;player.defaultPlaybackRate=r;player.playbackRate=r;}
 applySpeed();
 $('speed').onchange=()=>{cfg.speed=$('speed').value;save('cfg',cfg);applySpeed();};
@@ -218,10 +365,11 @@ async function run(s,from,to,reps){
       navigator.mediaSession.setActionHandler('stop',stop);
     }
   }catch(e){}
+  renderMainText(s,from,to);
   for(let r=1;r<=reps;r++){
     for(let a=from;a<=to;a++){
       if(my!==token)return;
-      last={s,a,to,reps};save('last',last);
+      last={s,a,to,reps};save('last',last);highlight(a);
       statusEl.textContent=`${NAMES[s-1]} · آية ${a} · المرة ${r} من ${reps}`;
       const ok=await playAyah(s,a);
       if(my!==token)return;
@@ -420,7 +568,90 @@ async function downloadSurah(s,btn){
   btn.disabled=false;refreshDl();
 }
 
+// ---- التبويبات ----
+let tInit=false;
+function showTab(n){
+  $('v1').hidden=n!==1;$('v2').hidden=n!==2;
+  $('tab1').classList.toggle('on',n===1);$('tab2').classList.toggle('on',n===2);
+  if(n===2&&!tInit){tInit=true;$('tSurah').value=$('surah').value;$('tFrom').value=$('from').value;$('tTo').value=$('to').value;renderRead();}
+  window.scrollTo(0,0);
+}
+$('tab1').onclick=()=>showTab(1);
+$('tab2').onclick=()=>showTab(2);
+
+// ---- القراءة ----
+NAMES.forEach((n,i)=>{const o=document.createElement('option');o.value=i+1;o.textContent=(i+1)+' - '+n;$('tSurah').appendChild(o);});
+$('tSurah').value=1;
+function tRange(){
+  const sn=+$('tSurah').value,max=COUNTS[sn-1];
+  let f=Math.max(1,+$('tFrom').value||1),t=Math.min(max,+$('tTo').value||max);
+  if(f>t)[f,t]=[t,f];
+  $('tFrom').value=f;$('tTo').value=t;return {s:sn,f,t};
+}
+function renderRead(){const r=tRange();renderRange($('readBox'),r.s,r.f,r.t);}
+$('tSurah').onchange=()=>{const sn=+$('tSurah').value;$('tFrom').value=1;$('tTo').value=COUNTS[sn-1];q=null;renderRead();clearQ();};
+$('tFrom').onchange=$('tTo').onchange=()=>{q=null;renderRead();clearQ();};
+$('readBox').onclick=async e=>{
+  const el=e.target.closest('.ay');if(!el)return;
+  const {s:sn}=tRange(),a=+el.dataset.a;
+  stop();const my=token;
+  $('readBox').querySelectorAll('.cur').forEach(x=>x.classList.remove('cur'));el.classList.add('cur');
+  statusEl.textContent=`${NAMES[sn-1]} · آية ${a}`;
+  const ok=await playAyah(sn,a);
+  if(my===token)statusEl.textContent=ok?'انتهى':'تعذّر تشغيل الصوت.';
+};
+$('mRead').onclick=()=>{$('readCard').hidden=false;$('testCard').hidden=true;renderRead();};
+$('mTest').onclick=()=>{
+  if(!TEXT){alert('حمّل نص القرآن أولاً (زر «تحميل النص»).');return;}
+  $('readCard').hidden=true;$('testCard').hidden=false;if(!q)newQuestion();
+};
+
+// ---- الاختبار ----
+let q=null,stats=load('stats',{}),score={ok:0,bad:0};
+function clearQ(){$('qBox').innerHTML='';$('qScore').textContent='';}
+function renderQ(){
+  if(!q)return;
+  const html=q.words.map((w,i)=>q.shown[i]?`<span>${w}</span>`:`<span class="blank" style="width:${Math.max(1.2,norm(w).length*0.55).toFixed(1)}em"></span>`).join(' ');
+  $('qBox').innerHTML=html+` <span class="mk">﴿${ar(q.a)}﴾</span>`;
+  $('qScore').textContent=`${NAMES[q.s-1]} · آية ${q.a} — تذكرت: ${score.ok} · لم أتذكر: ${score.bad}`;
+}
+function newQuestion(){
+  if(!TEXT){alert('حمّل نص القرآن أولاً.');return;}
+  const r=tRange();
+  const a=r.f+Math.floor(Math.random()*(r.t-r.f+1));
+  let type=$('qType').value;
+  if(type==='random')type=['first','hideStart','hideMid','hideEnd'][Math.floor(Math.random()*4)];
+  const words=TEXT[r.s-1][a-1].split(' ').filter(Boolean),n=words.length;
+  const shown=new Array(n).fill(false);
+  if(type==='first'){if(n>1)shown[0]=true;}
+  else if(type==='hideStart'){const k=Math.ceil(n/2);for(let i=k;i<n;i++)shown[i]=true;}
+  else if(type==='hideEnd'){const k=Math.ceil(n/2);for(let i=0;i<n-k;i++)shown[i]=true;}
+  else{let x=Math.floor(n/3),y=Math.ceil(2*n/3);if(y<=x)y=x+1;for(let i=0;i<n;i++)shown[i]=i<x||i>=y;}
+  q={s:r.s,a,words,shown,answered:false};
+  renderQ();
+}
+function answerQ(ok){
+  if(!q||q.answered)return;
+  q.answered=true;
+  if(ok)score.ok++;else score.bad++;
+  const k=keyOf(q.s,q.a),st=stats[k]||{ok:0,bad:0};
+  if(ok)st.ok++;else st.bad++;st.t=Date.now();stats[k]=st;save('stats',stats);
+  q.shown.fill(true);renderQ();
+}
+$('qNew').onclick=newQuestion;
+$('qHint').onclick=()=>{if(!q)return;const i=q.shown.indexOf(false);if(i>=0){q.shown[i]=true;renderQ();}};
+$('qShow').onclick=()=>{if(!q)return;q.shown.fill(true);renderQ();};
+$('qOk').onclick=()=>answerQ(true);
+$('qBad').onclick=()=>answerQ(false);
+$('qHear').onclick=async()=>{
+  if(!q)return;stop();const my=token;
+  statusEl.textContent=`${NAMES[q.s-1]} · آية ${q.a}`;
+  const ok=await playAyah(q.s,q.a);
+  if(my===token)statusEl.textContent=ok?'انتهى':'تعذّر تشغيل الصوت.';
+};
+
 refreshRecInfo();refreshRecList();
+loadTextCache().then(()=>onTextReady());
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
 </body>

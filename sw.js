@@ -1,5 +1,5 @@
 // يخزّن صفحات التطبيق ليفتح دون إنترنت (الصوت يُخزَّن من داخل التطبيق بزر «تحميل»)
-const CACHE = 'quran-app-v1';
+const CACHE = 'quran-app-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -9,7 +9,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== 'ayah-audio').map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => ![CACHE, 'ayah-audio', 'qtext', 'fonts-v1'].includes(k)).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -18,6 +18,14 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+    event.respondWith(
+      caches.open('fonts-v1').then((c) =>
+        c.match(req).then((hit) => hit || fetch(req).then((res) => { c.put(req, res.clone()); return res; }))
+      )
+    );
+    return;
+  }
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
