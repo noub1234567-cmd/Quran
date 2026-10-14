@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#075b43">
+  <title>اختبار الذكاء الاصطناعي لتصحيح التلاوة</title>
+  <style>
+    :root { --green:#075b43; --light:#e8f4ed; --border:#d7e3dc; --text:#18352a; --red:#b42318; --orange:#8a5200; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:16px; background:#f4f8f5; color:var(--text); font-family:Arial,Tahoma,sans-serif; line-height:1.8; }
+    main { max-width:760px; margin:auto; }
+    h1 { color:var(--green); font-size:25px; text-align:center; }
+    h2 { font-size:19px; margin-top:0; }
+    .intro { text-align:center; color:#486357; }
+    .card { background:white; border:1px solid var(--border); border-radius:14px; padding:17px; margin:16px 0; box-shadow:0 3px 12px #173c2410; }
+    label { display:block; font-weight:bold; margin-bottom:7px; }
+    textarea,input[type="file"] { width:100%; margin-bottom:12px; }
+    textarea { min-height:120px; resize:vertical; padding:12px; border:1px solid #b9ccc0; border-radius:9px; font:inherit; line-height:2; }
+    button { border:0; border-radius:9px; background:var(--green); color:white; padding:11px 15px; font-size:16px; font-weight:bold; cursor:pointer; margin:4px 0; }
+    button.secondary { background:#e4eee8; color:var(--green); }
+    button.danger { background:#a52828; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .buttons { display:flex; flex-wrap:wrap; gap:7px; }
+    .status { background:var(--light); border-radius:9px; padding:12px; overflow-wrap:anywhere; }
+    .notice { font-size:14px; color:#53685c; }
+    .result { background:#f8faf8; border:1px solid var(--border); border-radius:9px; padding:12px; margin-top:12px; overflow-wrap:anywhere; }
+    .good { color:var(--green); font-weight:bold; }
+    .bad { color:var(--red); font-weight:bold; }
+    .extra { color:var(--orange); font-weight:bold; }
+    progress { width:100%; height:14px; }
+    audio { width:100%; margin-top:10px; }
+    .word-list { display:flex; flex-wrap:wrap; gap:7px; }
+    .word { border-radius:7px; padding:5px 9px; background:#e8f4ed; }
+    .word.missing { background:#fde8e7; color:var(--red); }
+    .word.extra { background:#fff0d1; color:var(--orange); }
+    small { color:#64756b; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>اختبار الذكاء الاصطناعي لتصحيح التلاوة</h1>
+  <p class="intro">تجربة مستقلة على الهاتف — لا تعدّل تطبيق القرآن الأصلي.</p>
+
+  <section class="card">
+    <h2>1. تجهيز النموذج</h2>
+    <p>نستخدم نموذج Whisper متعدد اللغات للتعرف على الكلام العربي. يجب تنزيل النموذج أول مرة، وقد يستغرق ذلك وقتًا.</p>
+    <button id="loadBtn">تحميل نموذج الذكاء الاصطناعي</button>
+    <progress id="progress" max="100" value="0" hidden></progress>
+    <p id="status" class="status" aria-live="polite">النموذج لم يُحمّل بعد.</p>
+    <p class="notice">تتم معالجة الصوت على الجهاز. تنزيل النموذج ومكتبة التشغيل يحتاج إلى الإنترنت، وقد تختلف سرعة المعالجة حسب المتصفح والذاكرة المتاحة.</p>
+  </section>
+
+  <section class="card">
+    <h2>2. نص الآية الصحيحة</h2>
+    <label for="reference">الصق الآية التي تريد اختبارها</label>
+    <textarea id="reference" placeholder="اكتب الآية القرآنية هنا..."></textarea>
+    <p class="notice">أدخل نص الآية كما هو في المصحف. يمكن أن تكون الآية قصيرة أو طويلة. الأفضل أن تبدأ بآية قصيرة للتأكد من عمل النموذج.</p>
+  </section>
+
+  <section class="card">
+    <h2>3. تسجيل التلاوة</h2>
+    <p class="notice">يمكنك التسجيل مباشرة، أو اختيار تسجيل محفوظ على هاتفك.</p>
+    <div class="buttons">
+      <button id="recordBtn">🎙️ بدء التسجيل</button>
+      <button id="stopBtn" class="danger" disabled>إيقاف التسجيل</button>
+    </div>
+    <audio id="audioPlayer" controls hidden></audio>
+    <label for="audioFile" style="margin-top:16px">أو اختر ملفًا صوتيًا من الهاتف</label>
+    <input id="audioFile" type="file" accept="audio/*">
+    <p id="audioInfo" class="notice">لم يُحدَّد تسجيل بعد.</p>
+  </section>
+
+  <section class="card">
+    <h2>4. تحليل التلاوة</h2>
+    <button id="analyzeBtn" disabled>تحليل التسجيل ومقارنته بالآية</button>
+    <p id="analysisStatus" class="status" aria-live="polite">حمّل النموذج وسجّل الآية أو اختر ملفًا صوتيًا.</p>
+    <div id="transcriptionBox" class="result" hidden>
+      <h3>النص الذي تعرّف عليه النموذج</h3>
+      <div id="transcription"></div>
+    </div>
+    <div id="comparisonBox" class="result" hidden>
+      <h3>الاختلافات المحتملة</h3>
+      <div id="comparison"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>ملاحظات مهمة</h2>
+    <ul>
+      <li>النموذج يتعرف على الكلام، ولا يضمن اكتشاف أخطاء التجويد أو الحركات.</li>
+      <li>اختلاف النص المتعرف عليه عن الآية لا يعني بالضرورة أن القارئ أخطأ؛ فقد يكون الخطأ من النموذج نفسه.</li>
+      <li>لا تُرسل الصفحة ملف التسجيل إلى خدمة خارجية للتعرف على الكلام.</li>
+      <li>هذه نسخة اختبار، وليست نظامًا معتمدًا لتصحيح القرآن.</li>
+    </ul>
+  </section>
+</main>
+
+<script type="module">
+  import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1";
+  env.allowLocalModels = false;
+
+  const MODEL = "onnx-community/whisper-tiny";
+  const $ = (id) => document.getElementById(id);
+  const loadBtn = $("loadBtn");
+  const recordBtn = $("recordBtn");
+  const stopBtn = $("stopBtn");
+  const analyzeBtn = $("analyzeBtn");
+  const status = $("status");
+  const analysisStatus = $("analysisStatus");
+  const progress = $("progress");
+  const audioPlayer = $("audioPlayer");
+  const audioInfo = $("audioInfo");
+
+  let recognizer = null;
+  let mediaRecorder = null;
+  let microphoneStream = null;
+  let audioBlob = null;
+  let audioObjectUrl = null;
+  let isRecording = false;
+  let isLoading = false;
+  let isAnalyzing = false;
+
+  function setStatus(message) { status.textContent = message; }
+  function setAnalysisStatus(message) { analysisStatus.textContent = message; }
+  function updateAnalyzeButton() {
+    analyzeBtn.disabled = !recognizer || !audioBlob || isAnalyzing || isLoading;
+  }
+  function formatBytes(bytes) { return (bytes / (1024 * 1024)).toFixed(1) + " MB"; }
+
+  async function loadModel() {
+    if (recognizer || isLoading) return;
+    isLoading = true;
+    loadBtn.disabled = true;
+    progress.hidden = false;
+    progress.value = 0;
+    setStatus("جارٍ تجهيز مكتبة التشغيل وتحميل النموذج...");
+
+    try {
+      const canUseWebGPU = typeof navigator !== "undefined" && "gpu" in navigator;
+      let firstError = null;
+
+      if (canUseWebGPU) {
+        try {
+          setStatus("المتصفح يوفّر WebGPU. جارٍ محاولة تشغيل النموذج عليه...");
+          recognizer = await pipeline("automatic-speech-recognition", MODEL, {
+            device: "webgpu",
+            dtype: "q4",
+            progress_callback: handleProgress
+          });
+        } catch (error) {
+          firstError = error;
+          recognizer = null;
+          setStatus("تعذر تشغيل النموذج عبر WebGPU. سنجرب وضع WASM...");
+        }
+      }
+
+      if (!recognizer) {
+        try {
+          recognizer = await pipeline("automatic-speech-recognition", MODEL, {
+            device: "wasm",
+            dtype: "q8",
+            progress_callback: handleProgress
+          });
+        } catch (error) {
+          recognizer = null;
+          if (firstError) console.warn("WebGPU error:", firstError);
+          throw error;
+        }
+      }
+
+      setStatus("تم تجهيز النموذج بنجاح. يمكنك تسجيل الآية وتحليلها.");
+      setAnalysisStatus("النموذج جاهز. أدخل نص الآية ثم سجّل تلاوتك.");
+    } catch (error) {
+      console.error(error);
+      setStatus("تعذر تحميل النموذج. تحقق من الإنترنت وذاكرة الهاتف، ثم أعد المحاولة. التفاصيل: " + (error?.message || String(error)));
+    } finally {
+      isLoading = false;
+      loadBtn.disabled = Boolean(recognizer);
+      progress.hidden = true;
+      updateAnalyzeButton();
+    }
+  }
+
+  function handleProgress(event) {
+    if (!event || typeof event !== "object") return;
+    if (typeof event.progress === "number") progress.value = Math.max(0, Math.min(100, event.progress));
+    if (event.status === "progress") {
+      const name = event.file || event.name || "ملف النموذج";
+      setStatus("جارٍ تنزيل أو تجهيز: " + name +
+        (typeof event.progress === "number" ? " — " + Math.round(event.progress) + "%" : ""));
+    } else if (event.status === "done") {
+      setStatus("تم تجهيز جزء من ملفات النموذج...");
+    }
+  }
+
+  loadBtn.addEventListener("click", loadModel);
+
+  function clearAudio() {
+    if (audioObjectUrl) {
+      URL.revokeObjectURL(audioObjectUrl);
+      audioObjectUrl = null;
+    }
+    audioBlob = null;
+    audioPlayer.removeAttribute("src");
+    audioPlayer.hidden = true;
+    audioInfo.textContent = "لم يُحدَّد تسجيل بعد.";
+    $("transcriptionBox").hidden = true;
+    $("comparisonBox").hidden = true;
+    updateAnalyzeButton();
+  }
+
+  function setAudio(blob, label) {
+    if (!blob || !blob.size) {
+      audioInfo.textContent = "الملف الصوتي فارغ أو غير صالح.";
+      return;
+    }
+    if (audioObjectUrl) URL.revokeObjectURL(audioObjectUrl);
+    audioBlob = blob;
+    audioObjectUrl = URL.createObjectURL(blob);
+    audioPlayer.src = audioObjectUrl;
+    audioPlayer.hidden = false;
+    audioInfo.textContent = label + " — الحجم: " + formatBytes(blob.size);
+    $("transcriptionBox").hidden = true;
+    $("comparisonBox").hidden = true;
+    setAnalysisStatus(recognizer ? "التسجيل جاهز للتحليل." : "التسجيل جاهز. حمّل النموذج قبل التحليل.");
+    updateAnalyzeButton();
+  }
+
+  $("audioFile").addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("audio/")) {
+      audioInfo.textContent = "اختر ملفًا صوتيًا صالحًا.";
+      return;
+    }
+    setAudio(file, "ملف صوتي مختار");
+  });
+
+  recordBtn.addEventListener("click", async () => {
+    if (isRecording) return;
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      setAnalysisStatus("التسجيل غير مدعوم في هذا المتصفح. افتح الصفحة عبر HTTPS أو اختر ملفًا صوتيًا.");
+      return;
+    }
+    try {
+      microphoneStream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+      const preferredTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+      let options = {};
+      for (const type of preferredTypes) {
+        if (MediaRecorder.isTypeSupported(type)) { options.mimeType = type; break; }
+      }
+      const chunks = [];
+      mediaRecorder = new MediaRecorder(microphoneStream, options);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size) chunks.push(event.data);
+      };
+      mediaRecorder.onerror = (event) => {
+        console.error("Recording error:", event.error);
+        setAnalysisStatus("حدث خطأ أثناء التسجيل. حاول مرة أخرى.");
+      };
+      mediaRecorder.onstop = () => {
+        const type = mediaRecorder.mimeType || "audio/webm";
+        const blob = new Blob(chunks, { type });
+        setAudio(blob, "تسجيل الميكروفون");
+        if (microphoneStream) {
+          microphoneStream.getTracks().forEach(track => track.stop());
+          microphoneStream = null;
+        }
+        recordBtn.disabled = false;
+        stopBtn.disabled = true;
+        isRecording = false;
+        setAnalysisStatus("انتهى التسجيل. يمكنك الآن تحليل التلاوة.");
+      };
+      clearAudio();
+      mediaRecorder.start();
+      isRecording = true;
+      recordBtn.disabled = true;
+      stopBtn.disabled = false;
+      setAnalysisStatus("جارٍ التسجيل... اقرأ الآية بوضوح ثم اضغط إيقاف التسجيل.");
+    } catch (error) {
+      console.error(error);
+      if (microphoneStream) {
+        microphoneStream.getTracks().forEach(track => track.stop());
+        microphoneStream = null;
+      }
+      setAnalysisStatus("تعذر الوصول إلى الميكروفون. تحقق من إذن التسجيل وإعدادات المتصفح. " + (error?.message || ""));
+    }
+  });
+
+  stopBtn.addEventListener("click", () => {
+    if (mediaRecorder && isRecording) mediaRecorder.stop();
+  });
+
+  async function decodeAndResample(blob) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) throw new Error("Web Audio API غير متوفر في هذا المتصفح.");
+    const context = new AudioContextClass();
+
+    try {
+      const decoded = await context.decodeAudioData(arrayBuffer);
+      const targetRate = 16000;
+      const targetLength = Math.ceil(decoded.duration * targetRate);
+      if (targetLength <= 0) throw new Error("التسجيل الصوتي فارغ.");
+
+      const OfflineContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (OfflineContext) {
+        const offline = new OfflineContext(1, targetLength, targetRate);
+        const monoBuffer = context.createBuffer(1, decoded.length, decoded.sampleRate);
+        const monoData = monoBuffer.getChannelData(0);
+        for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+          const channel = decoded.getChannelData(ch);
+          for (let i = 0; i < channel.length; i++) monoData[i] += channel[i] / decoded.numberOfChannels;
+        }
+        const monoSource = offline.createBufferSource();
+        monoSource.buffer = monoBuffer;
+        monoSource.connect(offline.destination);
+        monoSource.start(0);
+        const rendered = await offline.startRendering();
+        return { audio: new Float32Array(rendered.getChannelData(0)), sampleRate: targetRate };
+      }
+
+      const sourceRate = decoded.sampleRate;
+      const output = new Float32Array(targetLength);
+      const channels = [];
+      for (let ch = 0; ch < decoded.numberOfChannels; ch++) channels.push(decoded.getChannelData(ch));
+      for (let i = 0; i < targetLength; i++) {
+        const sourcePosition = i * sourceRate / targetRate;
+        const left = Math.floor(sourcePosition);
+        const right = Math.min(left + 1, decoded.length - 1);
+        const fraction = sourcePosition - left;
+        let sample = 0;
+        for (const channel of channels) {
+          sample += (channel[left] * (1 - fraction) + channel[right] * fraction) / channels.length;
+        }
+        output[i] = sample;
+      }
+      return { audio: output, sampleRate: targetRate };
+    } finally {
+      await context.close().catch(() => {});
+    }
+  }
+
+  function normalizeArabic(text) {
+    return text.normalize("NFC")
+      .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "")
+      .replace(/\u0640/g, "")
+      .replace(/[أإآٱ]/g, "ا")
+      .replace(/ى/g, "ي")
+      .replace(/[^\p{Script=Arabic}\s]/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function tokenize(text) {
+    const normalized = normalizeArabic(text);
+    return normalized ? normalized.split(" ").filter(Boolean) : [];
+  }
+
+  function compareWords(referenceText, spokenText) {
+    const ref = tokenize(referenceText);
+    const hyp = tokenize(spokenText);
+    const rows = ref.length + 1;
+    const cols = hyp.length + 1;
+    const dp = Array.from({ length: rows }, () => new Array(cols).fill(0));
+
+    for (let i = 0; i < rows; i++) dp[i][0] = i;
+    for (let j = 0; j < cols; j++) dp[0][j] = j;
+
+    for (let i = 1; i < rows; i++) {
+      for (let j = 1; j < cols; j++) {
+        dp[i][j] = ref[i - 1] === hyp[j - 1]
+          ? dp[i - 1][j - 1]
+          : Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + 1);
+      }
+    }
+
+    const operations = [];
+    let i = ref.length, j = hyp.length;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && ref[i - 1] === hyp[j - 1] && dp[i][j] === dp[i - 1][j - 1]) {
+        operations.push({ type:"same", ref:ref[i - 1], hyp:hyp[j - 1] }); i--; j--;
+      } else if (i > 0 && j > 0 && dp[i][j] === dp[i - 1][j - 1] + 1) {
+        operations.push({ type:"replace", ref:ref[i - 1], hyp:hyp[j - 1] }); i--; j--;
+      } else if (i > 0 && dp[i][j] === dp[i - 1][j] + 1) {
+        operations.push({ type:"missing", ref:ref[i - 1] }); i--;
+      } else {
+        operations.push({ type:"extra", hyp:hyp[j - 1] }); j--;
+      }
+    }
+
+    operations.reverse();
+    const counts = { same:0, missing:0, replace:0, extra:0 };
+    for (const op of operations) counts[op.type]++;
+    return { operations, counts, ref, hyp };
+  }
+
+  function renderComparison(reference, spoken) {
+    const box = $("comparison");
+    box.replaceChildren();
+    const result = compareWords(reference, spoken);
+    const summary = document.createElement("p");
+    summary.textContent = "كلمات النص المرجعي: " + result.ref.length + " — كلمات النص المتعرف عليه: " + result.hyp.length;
+    box.appendChild(summary);
+
+    const legend = document.createElement("p");
+    legend.innerHTML = '<span class="good">الأخضر: كلمة متطابقة</span><br><span class="bad">الأحمر: كلمة محتمل إسقاطها أو استبدالها</span><br><span class="extra">البرتقالي: كلمة إضافية محتملة</span>';
+    box.appendChild(legend);
+
+    const list = document.createElement("div");
+    list.className = "word-list";
+    for (const op of result.operations) {
+      const item = document.createElement("span");
+      item.className = "word";
+      if (op.type === "same") {
+        item.textContent = op.ref;
+      } else if (op.type === "missing") {
+        item.classList.add("missing");
+        item.textContent = "إسقاط محتمل: " + op.ref;
+      } else if (op.type === "replace") {
+        item.classList.add("missing");
+        item.textContent = "المتوقع: " + op.ref + " | المسموع: " + op.hyp;
+      } else {
+        item.classList.add("extra");
+        item.textContent = "إضافة محتملة: " + op.hyp;
+      }
+      list.appendChild(item);
+    }
+    box.appendChild(list);
+
+    const note = document.createElement("p");
+    note.className = "notice";
+    note.textContent = "هذه مقارنة نصية آلية. قد يخطئ التعرف الصوتي، ولا تكشف هذه المقارنة وحدها أخطاء التجويد أو الحركات.";
+    box.appendChild(note);
+  }
+
+  analyzeBtn.addEventListener("click", async () => {
+    if (!recognizer || !audioBlob || isAnalyzing) return;
+    const reference = $("reference").value.trim();
+    if (!reference) {
+      setAnalysisStatus("الصق نص الآية الصحيحة أولًا حتى نستطيع المقارنة.");
+      $("reference").focus();
+      return;
+    }
+
+    isAnalyzing = true;
+    updateAnalyzeButton();
+    $("transcriptionBox").hidden = true;
+    $("comparisonBox").hidden = true;
+
+    try {
+      setAnalysisStatus("جارٍ تجهيز الصوت محليًا قبل التعرف على الكلام...");
+      const decoded = await decodeAndResample(audioBlob);
+      setAnalysisStatus("جارٍ تحليل الصوت داخل الهاتف. قد تستغرق العملية وقتًا، خصوصًا للتسجيلات الطويلة...");
+
+      const result = await recognizer(decoded.audio, {
+        language: "arabic",
+        task: "transcribe",
+        chunk_length_s: 20,
+        stride_length_s: 4
+      });
+
+      const text = typeof result === "string" ? result : (result?.text || "");
+      $("transcription").textContent = text || "لم يتمكن النموذج من التعرف على الكلام.";
+      $("transcriptionBox").hidden = false;
+
+      if (text.trim()) {
+        renderComparison(reference, text);
+        $("comparisonBox").hidden = false;
+        setAnalysisStatus("انتهى التحليل. راجع الاختلافات المحتملة، وتحقق من التسجيل بنفسك.");
+      } else {
+        setAnalysisStatus("لم ينتج النموذج نصًا واضحًا. جرّب تسجيلًا أوضح.");
+      }
+    } catch (error) {
+      console.error(error);
+      setAnalysisStatus("حدث خطأ أثناء التحليل: " + (error?.message || String(error)) + " — جرّب تسجيلًا أقصر أو أعد تحميل الصفحة.");
+    } finally {
+      isAnalyzing = false;
+      updateAnalyzeButton();
+    }
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (audioObjectUrl) URL.revokeObjectURL(audioObjectUrl);
+    if (microphoneStream) microphoneStream.getTracks().forEach(track => track.stop());
+  });
+
+  updateAnalyzeButton();
+</script>
+</body>
+</html>
