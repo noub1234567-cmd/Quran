@@ -75,6 +75,10 @@
     <div><label for="sleep">مؤقت الإيقاف</label>
       <select id="sleep"><option value="0">بدون</option><option value="10">10 د</option><option value="20">20 د</option><option value="30">30 د</option><option value="60">60 د</option></select></div>
   </div>
+  <div class="row">
+    <div><label for="bsmAudio">البسملة قبل السورة</label>
+      <select id="bsmAudio"><option value="1">تشغيل</option><option value="0">إيقاف</option></select></div>
+  </div>
   <button class="primary" id="go">▶ ابدأ التكرار</button>
   <p class="hint">«الفاصل» وقت صامت بعد كل آية لتردد أنت. ويُحفظ آخر موضع تلقائياً.</p>
 </div>
@@ -188,7 +192,7 @@ const load=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==nul
 const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
 let downloaded=new Set(load('dl',[]));
 let memorized=new Set(load('mem',[]));
-let cfg=Object.assign({gap:'0',speed:'1',txt:'show'},load('cfg',{}));
+let cfg=Object.assign({gap:'0',speed:'1',txt:'show',bsm:'1'},load('cfg',{}));
 let last=load('last',null);
 
 // ---- تخزين التسجيلات (IndexedDB) ----
@@ -313,13 +317,14 @@ refreshDl();refreshMem();
 function setRange(s){$('surah').value=s;$('from').value=1;$('to').value=COUNTS[s-1];$('ay').value=1;refreshRecInfo();renderMainFromInputs();}
 $('surah').onchange=()=>setRange(+$('surah').value);
 
-$('gap').value=cfg.gap;$('speed').value=cfg.speed;$('txt').value=cfg.txt;
+$('gap').value=cfg.gap;$('speed').value=cfg.speed;$('txt').value=cfg.txt;$('bsmAudio').value=cfg.bsm;
 $('txt').onchange=()=>{cfg.txt=$('txt').value;save('cfg',cfg);$('ayahBox').dataset.mode=cfg.txt;};
 $('from').onchange=$('to').onchange=()=>renderMainFromInputs();
 function applySpeed(){const r=+$('speed').value||1;player.defaultPlaybackRate=r;player.playbackRate=r;}
 applySpeed();
 $('speed').onchange=()=>{cfg.speed=$('speed').value;save('cfg',cfg);applySpeed();};
 $('gap').onchange=()=>{cfg.gap=$('gap').value;save('cfg',cfg);};
+$('bsmAudio').onchange=()=>{cfg.bsm=$('bsmAudio').value;save('cfg',cfg);};
 $('sleep').onchange=()=>{
   clearTimeout(sleepT);const m=+$('sleep').value;
   if(m>0)sleepT=setTimeout(()=>{stop();statusEl.textContent='انتهى مؤقت الإيقاف';},m*60000);
@@ -370,6 +375,11 @@ async function run(s,from,to,reps){
     }
   }catch(e){}
   renderMainText(s,from,to);
+  if(from===1&&s!==1&&s!==9&&$('bsmAudio').value==='1'){
+    statusEl.textContent=`${NAMES[s-1]} · البسملة`;
+    await playAyah(1,1);
+    if(my!==token)return;
+  }
   for(let r=1;r<=reps;r++){
     for(let a=from;a<=to;a++){
       if(my!==token)return;
@@ -551,19 +561,23 @@ async function downloadSurah(s,btn){
   try{
     if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
     const c=await caches.open(CACHE_NAME),n=COUNTS[s-1];
-    for(let a=1;a<=n;a++){
-      btn.textContent=`${a}/${n}`;
-      const key=urlOf(s,a,0);
-      if(await c.match(key))continue;
+    const ensure=async(sn,a)=>{
+      const key=urlOf(sn,a,0);
+      if(await c.match(key))return;
       let ok=false;const errs=[];
       for(let i=0;i<SOURCES.length&&!ok;i++){
         try{
-          const r=await fetch(urlOf(s,a,i));
+          const r=await fetch(urlOf(sn,a,i));
           if(!r.ok){errs.push(i+':http '+r.status);continue;}
           await c.put(key,r);ok=true;
         }catch(err){errs.push(i+':'+String(err&&err.message||err));}
       }
       if(!ok)throw new Error(errs.join(' | '));
+    };
+    if(s!==1&&s!==9)await ensure(1,1);
+    for(let a=1;a<=n;a++){
+      btn.textContent=`${a}/${n}`;
+      await ensure(s,a);
     }
     downloaded.add(s);save('dl',[...downloaded]);
   }catch(e){
