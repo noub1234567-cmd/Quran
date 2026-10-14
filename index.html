@@ -43,6 +43,8 @@
   .ay{border-radius:8px;padding:2px 3px}
   .ay.cur{background:#ffe9a8}
   .mk{color:#0f766e;font-size:20px}
+  .bsm{text-align:center;color:#0f766e;font-size:28px;margin-bottom:4px}
+  #ayahBox[data-mode=cur] .bsm{display:none}
   #ayahBox[data-mode=hide] .t{display:none}
   #ayahBox[data-mode=cur] .ay:not(.cur){display:none}
   .blank{display:inline-block;border-bottom:2px dotted #0f766e;height:1em;vertical-align:baseline;margin:0 3px}
@@ -219,6 +221,7 @@ const keyOf=(s,a)=>s+':'+a;
 
 // ---- نص القرآن ----
 let TEXT=null;
+const BSM='بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ';
 const norm=t=>t.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g,'').replace(/\u0671/g,'\u0627');
 const ar=n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
 function buildText(j){
@@ -269,6 +272,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('.loadText');if(b
 function renderRange(box,sn,from,to){
   if(!TEXT){box.innerHTML='';return;}
   const parts=[];
+  if(from===1&&sn!==1&&sn!==9)parts.push('<div class="bsm">'+BSM+'</div>');
   for(let a=from;a<=to;a++){
     parts.push(`<span class="ay" data-a="${a}"><span class="t">${TEXT[sn-1][a-1]}</span> <span class="mk">﴿${ar(a)}﴾</span> </span>`);
   }
