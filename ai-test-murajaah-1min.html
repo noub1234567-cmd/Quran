@@ -182,6 +182,7 @@ $('runBtn').addEventListener('click', async () => {
     if (!audio.length) throw new Error('ملف الصوت فارغ.');
     const pred = await tilawaSession.transcribe(audio);
     lastTranscript = pred.transcript || '';
+    window.__lastTranscript = lastTranscript;
     result(`السورة: ${pred.surah ?? 'غير محددة'}\nالآية: ${pred.ayah ?? 'غير محددة'}${pred.ayah_end && pred.ayah_end !== pred.ayah ? ' – ' + pred.ayah_end : ''}\nدرجة المطابقة: ${pred.score == null ? 'غير متاحة' : Number(pred.score).toFixed(3)}\n\nالنص المتعرّف عليه:\n${pred.transcript || 'لم يُنتج النموذج نصًا واضحًا.'}`);
     status('انتهى التحليل. تمت معالجة الصوت داخل المتصفح.');
   } catch(e) {
@@ -193,8 +194,6 @@ $('runBtn').addEventListener('click', async () => {
   }
 });
 </script>
-</body>
-</html>
 <script>
 (function(){
   const norm = s => (s || '').normalize('NFC')
@@ -204,11 +203,7 @@ $('runBtn').addEventListener('click', async () => {
     .trim().split(/\s+/).filter(Boolean);
   document.getElementById('compareBtn').addEventListener('click', () => {
     const refRaw = document.getElementById('reference').value;
-    const recRaw = window.__lastTranscript || '';
-    // Last transcript is mirrored below by the main script's result display.
-    const shown = document.getElementById('result').innerText;
-    const match = shown.match(/النص المتعرّف عليه:\n([\s\S]*)/);
-    const recText = match ? match[1].trim() : '';
+    const recText = window.__lastTranscript || '';
     const ref = norm(refRaw), rec = norm(recText);
     const out = document.getElementById('comparison');
     if (!ref.length || !rec.length) { out.textContent = 'أدخل النص المرجعي ثم حلّل التسجيل أولًا.'; return; }
@@ -236,3 +231,5 @@ $('runBtn').addEventListener('click', async () => {
   function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 })();
 </script>
+</body>
+</html>
