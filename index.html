@@ -37,7 +37,7 @@
   #stop{background:#e11d48;color:#fff;padding:8px 16px}
   #note{font-size:12px;color:#5b7a77;margin:12px;text-align:center}
   .tabs{display:flex;background:#0d625b}
-  .tabs button{flex:1;background:none;color:#cfeeea;border-radius:0;padding:12px}
+  .tabs button{flex:1;background:none;color:#cfeeea;border-radius:0;padding:12px 4px;font-size:14px}
   .tabs button.on{background:#f0f7f6;color:#0f766e;font-weight:700}
   .quranText{font-family:'Amiri Quran','Amiri','Scheherazade New',serif;font-size:26px;line-height:2.3;text-align:right;position:relative;max-height:45vh;overflow:auto;padding:6px}
   .ay{border-radius:8px;padding:2px 3px}
@@ -66,7 +66,7 @@
 </head>
 <body>
 <header>حفظ القرآن</header>
-<div class="tabs"><button id="tab1" class="on">التكرار</button><button id="tab2">القراءة والاختبار</button><button id="tab3">الخطة</button></div>
+<div class="tabs"><button id="tab1" class="on">التكرار</button><button id="tab2">القراءة والاختبار</button><button id="tab3">الخطة</button><button id="tab4">القرّاء</button></div>
 <main id="v1">
 
 <div class="card">
@@ -254,6 +254,17 @@
   </div>
 </main>
 
+<main id="v4" hidden>
+  <div class="card">
+    <h2>القرّاء</h2>
+    <p class="hint">اختر القارئ، فيُستخدم في التكرار والاختبار والمقارنة. «فحص التحميل» يتأكد هل يمكن تخزين صوت القارئ للعمل دون إنترنت. أما التحميل نفسه فيتم من قائمة السور سورةً سورة.</p>
+    <button class="primary" id="probeAll">فحص تحميل كل القرّاء</button>
+    <p class="hint" id="probeMsg"></p>
+    <p class="hint" id="storageInfo"></p>
+    <div id="recitersBox" style="margin-top:10px"></div>
+  </div>
+</main>
+
 <div id="bar"><div id="status">اضغط على سورة للاستماع</div><button id="stop">إيقاف</button></div>
 <audio id="player" preload="auto"></audio>
 
@@ -262,13 +273,33 @@ const COUNTS=[7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,
 const NAMES="الفاتحة،البقرة،آل عمران،النساء،المائدة،الأنعام،الأعراف،الأنفال،التوبة،يونس،هود،يوسف،الرعد،إبراهيم،الحجر،النحل،الإسراء،الكهف،مريم،طه،الأنبياء،الحج،المؤمنون،النور،الفرقان،الشعراء،النمل،القصص،العنكبوت،الروم،لقمان،السجدة،الأحزاب،سبأ،فاطر،يس،الصافات،ص،الزمر،غافر،فصلت،الشورى،الزخرف،الدخان،الجاثية،الأحقاف،محمد،الفتح،الحجرات،ق،الذاريات،الطور،النجم،القمر،الرحمن،الواقعة،الحديد،المجادلة،الحشر،الممتحنة،الصف،الجمعة،المنافقون،التغابن،الطلاق،التحريم،الملك،القلم،الحاقة،المعارج،نوح،الجن،المزمل،المدثر،القيامة،الإنسان،المرسلات،النبأ،النازعات،عبس،التكوير،الانفطار،المطففين،الانشقاق،البروج،الطارق،الأعلى،الغاشية،الفجر،البلد،الشمس،الليل،الضحى،الشرح،التين،العلق،القدر،البينة،الزلزلة،العاديات،القارعة،التكاثر،العصر،الهمزة،الفيل،قريش،الماعون،الكوثر،الكافرون،النصر،المسد،الإخلاص،الفلق،الناس".split("،");
 const OFFSET=[];let acc=0;COUNTS.forEach(c=>{OFFSET.push(acc);acc+=c;});
 const pad=n=>String(n).padStart(3,'0');
-const SOURCES=[
-  (s,a)=>'https://cdn.islamic.network/quran/audio/128/ar.alafasy/'+(OFFSET[s-1]+a)+'.mp3',
-  (s,a)=>'https://cdn.islamic.app/quran/audio/ar.alafasy/'+(OFFSET[s-1]+a)+'.mp3',
-  (s,a)=>'https://everyayah.com/data/Alafasy_128kbps/'+pad(s)+pad(a)+'.mp3',
-  (s,a)=>'https://verses.quran.com/Alafasy/mp3/'+pad(s)+pad(a)+'.mp3'
+const RECITERS=[
+  {id:'ar.alafasy',name:'مشاري العفاسي',style:'مرتّل',br:128,ev:['Alafasy_128kbps'],vq:'Alafasy/mp3'},
+  {id:'ar.husary',name:'محمود خليل الحصري',style:'مرتّل',br:128,ev:['Husary_128kbps']},
+  {id:'ar.parhizgar',name:'الحصري (معلّم)',style:'تعليمي للتكرار',br:64,ev:['Husary_Muallim_128kbps']},
+  {id:'ar.minshawi',name:'محمد صديق المنشاوي',style:'مرتّل',br:128,ev:['Minshawy_Murattal_128kbps']},
+  {id:'ar.minshawimujawwad',name:'محمد صديق المنشاوي',style:'مجوّد',br:64,ev:['Minshawy_Mujawwad_192kbps']},
+  {id:'ar.abdulbasit',name:'عبد الباسط عبد الصمد',style:'مرتّل',br:192,ev:['Abdul_Basit_Murattal_192kbps']},
+  {id:'ar.abdulbasitmujawwad',name:'عبد الباسط عبد الصمد',style:'مجوّد',br:192,ev:['Abdul_Basit_Mujawwad_128kbps']},
+  {id:'ar.sudais',name:'عبد الرحمن السديس',style:'مرتّل',br:192,ev:['Abdurrahmaan_As-Sudais_192kbps']},
+  {id:'ar.shuraim',name:'سعود الشريم',style:'مرتّل',br:128,ev:['Saood_ash-Shuraym_128kbps']},
+  {id:'ar.hudhaify',name:'علي الحذيفي',style:'مرتّل',br:128,ev:['Hudhaify_128kbps']},
+  {id:'ar.ajamy',name:'أحمد بن علي العجمي',style:'مرتّل',br:128,ev:['Ahmed_ibn_Ali_al-Ajamy_128kbps_ketaballah.net']},
+  {id:'ar.muhammadayoub',name:'محمد أيوب',style:'مرتّل',br:128,ev:['Muhammad_Ayyoub_128kbps']},
+  {id:'ar.muhammadjibreel',name:'محمد جبريل',style:'مرتّل',br:128,ev:['Muhammad_Jibreel_128kbps']}
 ];
-const CACHE_NAME='ayah-audio';
+const recById=id=>RECITERS.find(r=>r.id===id)||RECITERS[0];
+function sourcesFor(r){
+  const list=[
+    (sn,a)=>'https://cdn.islamic.network/quran/audio/'+r.br+'/'+r.id+'/'+(OFFSET[sn-1]+a)+'.mp3',
+    (sn,a)=>'https://cdn.islamic.app/quran/audio/'+r.id+'/'+(OFFSET[sn-1]+a)+'.mp3'
+  ];
+  (r.ev||[]).forEach(f=>list.push((sn,a)=>'https://everyayah.com/data/'+f+'/'+pad(sn)+pad(a)+'.mp3'));
+  if(r.vq)list.push((sn,a)=>'https://verses.quran.com/'+r.vq+'/'+pad(sn)+pad(a)+'.mp3');
+  return list;
+}
+let curRec=RECITERS[0];
+let SOURCES=sourcesFor(curRec);
 const urlOf=(s,a,i=0)=>SOURCES[i](s,a);
 
 const $=id=>document.getElementById(id);
@@ -276,9 +307,12 @@ const player=$('player'),statusEl=$('status');
 let token=0,pendingResolve=null,waitTimer=null,sleepT=null,recBlob=null,rec=null;
 const load=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v;}catch(e){return d;}};
 const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
-let downloaded=new Set(load('dl',[]));
 let memorized=new Set(load('mem',[]));
-let cfg=Object.assign({gap:'0',speed:'1',txt:'show',bsm:'1'},load('cfg',{}));
+let cfg=Object.assign({gap:'0',speed:'1',txt:'show',bsm:'1',rec:'ar.alafasy'},load('cfg',{}));
+curRec=recById(cfg.rec);SOURCES=sourcesFor(curRec);
+const dlKey=id=>id==='ar.alafasy'?'dl':'dl_'+id;
+let downloaded=new Set(load(dlKey(curRec.id),[]));
+let okSrc=load('okSrc',{}),okHost=load('okHost',{});
 let last=load('last',null);
 
 // ---- تخزين التسجيلات (IndexedDB) ----
@@ -641,38 +675,56 @@ $('recList').onclick=async e=>{
 };
 
 // ---- التحميل للعمل دون إنترنت ----
+const hostOf=u=>{try{return new URL(u).hostname;}catch(e){return '';}};
+async function fetchAudio(R,sn,a){
+  const S=sourcesFor(R),idx=okSrc[R.id],all=S.map((_,i)=>i);
+  const order=(typeof idx==='number'&&idx>=0)?[idx,...all.filter(i=>i!==idx)]:all;
+  const errs=[];
+  for(const i of order){
+    const u=S[i](sn,a);
+    try{
+      const r=await fetch(u);
+      if(!r.ok){errs.push(hostOf(u)+' http '+r.status);continue;}
+      const ct=(r.headers.get('content-type')||'').toLowerCase();
+      if(ct&&!/audio|octet|mpeg/.test(ct)){errs.push(hostOf(u)+' ليس ملفاً صوتياً');continue;}
+      return {r,i,host:hostOf(u)};
+    }catch(err){errs.push(hostOf(u)+' '+String(err&&err.message||err));}
+  }
+  throw new Error(errs.join(' | '));
+}
 async function downloadSurah(s,btn){
   if(downloaded.has(s)){
     if(!confirm('حذف هذه السورة من التخزين؟'))return;
     const c=await caches.open(CACHE_NAME);
     for(let a=1;a<=COUNTS[s-1];a++)await c.delete(urlOf(s,a,0));
-    downloaded.delete(s);save('dl',[...downloaded]);refreshDl();return;
+    downloaded.delete(s);save(dlKey(curRec.id),[...downloaded]);refreshDl();return;
+  }
+  const R=curRec;
+  if(okSrc[R.id]===-1){
+    alert('هذا القارئ متاح بالإنترنت فقط حالياً، فقد فشل فحص التحميل له. يمكنك إعادة الفحص من تبويب «القرّاء».');
+    return;
   }
   btn.disabled=true;
   try{
     if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
     const c=await caches.open(CACHE_NAME),n=COUNTS[s-1];
+    const key0=(sn,a)=>sourcesFor(R)[0](sn,a);
     const ensure=async(sn,a)=>{
-      const key=urlOf(sn,a,0);
+      const key=key0(sn,a);
       if(await c.match(key))return;
-      let ok=false;const errs=[];
-      for(let i=0;i<SOURCES.length&&!ok;i++){
-        try{
-          const r=await fetch(urlOf(sn,a,i));
-          if(!r.ok){errs.push(i+':http '+r.status);continue;}
-          await c.put(key,r);ok=true;
-        }catch(err){errs.push(i+':'+String(err&&err.message||err));}
-      }
-      if(!ok)throw new Error(errs.join(' | '));
+      const {r,i,host}=await fetchAudio(R,sn,a);
+      await c.put(key,r);
+      if(okSrc[R.id]!==i){okSrc[R.id]=i;okHost[R.id]=host;save('okSrc',okSrc);save('okHost',okHost);}
     };
     if(s!==1&&s!==9)await ensure(1,1);
     for(let a=1;a<=n;a++){
       btn.textContent=`${a}/${n}`;
       await ensure(s,a);
     }
-    downloaded.add(s);save('dl',[...downloaded]);
+    const set0=new Set(load(dlKey(R.id),[]));set0.add(s);save(dlKey(R.id),[...set0]);
+    if(R.id===curRec.id)downloaded=set0;
   }catch(e){
-    alert('تعذّر إكمال التحميل.\nالسبب التقني: '+(e&&e.message||e));
+    alert('تعذّر إكمال التحميل.\nالسبب التقني: '+(e&&e.message||e)+'\nجرّب «فحص التحميل» من تبويب القرّاء.');
   }
   btn.disabled=false;refreshDl();
 }
@@ -680,15 +732,17 @@ async function downloadSurah(s,btn){
 // ---- التبويبات ----
 let tInit=false;
 function showTab(n){
-  $('v1').hidden=n!==1;$('v2').hidden=n!==2;$('v3').hidden=n!==3;
-  ['tab1','tab2','tab3'].forEach((id,i)=>$(id).classList.toggle('on',i+1===n));
+  $('v1').hidden=n!==1;$('v2').hidden=n!==2;$('v3').hidden=n!==3;$('v4').hidden=n!==4;
+  ['tab1','tab2','tab3','tab4'].forEach((id,i)=>$(id).classList.toggle('on',i+1===n));
   if(n===3){fillForm();renderPlan();}
+  if(n===4)renderReciters();
   if(n===2&&!tInit){tInit=true;$('tSurah').value=$('surah').value;$('tFrom').value=$('from').value;$('tTo').value=$('to').value;renderRead();}
   window.scrollTo(0,0);
 }
 $('tab1').onclick=()=>showTab(1);
 $('tab2').onclick=()=>showTab(2);
 $('tab3').onclick=()=>showTab(3);
+$('tab4').onclick=()=>showTab(4);
 
 // ---- القراءة ----
 NAMES.forEach((n,i)=>{const o=document.createElement('option');o.value=i+1;o.textContent=(i+1)+' - '+n;$('tSurah').appendChild(o);});
@@ -1179,6 +1233,89 @@ $('oList').onclick=e=>{
 };
 // ---- نهاية الخطة ----
 
+// ---- القرّاء ----
+let probeBusy=false;
+function updateNote(){
+  $('note').textContent='الصوت: '+curRec.name+' ('+curRec.style+'). ★ لتعليم السورة المحفوظة، و«تحميل» لتعمل دون إنترنت.';
+}
+const dlCount=id=>load(dlKey(id),[]).length;
+async function probeReciter(r){
+  const S=sourcesFor(r),errs=[];
+  let found=-1,host='';
+  for(let i=0;i<S.length;i++){
+    const u=S[i](1,2);
+    try{
+      const resp=await fetch(u);
+      if(!resp.ok){errs.push(hostOf(u)+' http '+resp.status);continue;}
+      const blob=await resp.blob();
+      if(blob.size<2000){errs.push(hostOf(u)+' ملف غير صالح');continue;}
+      found=i;host=hostOf(u);break;
+    }catch(e){errs.push(hostOf(u)+' '+String(e&&e.message||e));}
+  }
+  okSrc[r.id]=found;okHost[r.id]=found>=0?host:errs.join(' | ');
+  save('okSrc',okSrc);save('okHost',okHost);
+  return found;
+}
+async function renderStorage(){
+  try{
+    const e=await navigator.storage.estimate();
+    $('storageInfo').textContent='المساحة المستخدمة في التطبيق: '+Math.round(e.usage/1048576)+' ميغابايت من '+Math.round(e.quota/1048576)+' متاحة.';
+  }catch(err){$('storageInfo').textContent='';}
+}
+function renderReciters(){
+  $('recitersBox').innerHTML=RECITERS.map(r=>{
+    const st=okSrc[r.id],cur=r.id===curRec.id,n=dlCount(r.id);
+    const stTxt=st===undefined?'لم يُفحص بعد':st>=0?'✓ يعمل دون إنترنت':'بالإنترنت فقط';
+    return `<div class="task" style="${cur?'outline:2px solid #0f766e':''}"><b>${r.name}</b> <small>(${r.style})</small><br><small>${stTxt}${n?' · محمّل: '+n+' سورة':''}</small><div class="row" style="margin-top:6px"><button class="alt ${cur?'on':''}" data-act="pick" data-id="${r.id}">${cur?'✓ المختار':'اختيار'}</button><button class="alt" data-act="probe" data-id="${r.id}">فحص التحميل</button>${n?`<button class="alt bad" data-act="clear" data-id="${r.id}">حذف التحميلات</button>`:''}</div></div>`;
+  }).join('');
+  renderStorage();
+}
+function pickReciter(id){
+  stop();
+  curRec=recById(id);SOURCES=sourcesFor(curRec);
+  cfg.rec=curRec.id;save('cfg',cfg);
+  downloaded=new Set(load(dlKey(curRec.id),[]));
+  refreshDl();updateNote();renderReciters();
+  statusEl.textContent='تم اختيار: '+curRec.name+' ('+curRec.style+')';
+}
+async function clearReciter(id){
+  const r=recById(id);
+  if(!confirm('حذف كل تحميلات '+r.name+' ('+r.style+')؟'))return;
+  try{
+    const c=await caches.open(CACHE_NAME),keys=await c.keys();
+    const prefix='https://cdn.islamic.network/quran/audio/'+r.br+'/'+r.id+'/';
+    for(const k of keys)if(k.url.startsWith(prefix))await c.delete(k);
+  }catch(e){}
+  save(dlKey(r.id),[]);
+  if(r.id===curRec.id){downloaded=new Set();refreshDl();}
+  renderReciters();
+}
+$('recitersBox').onclick=async e=>{
+  const b=e.target.closest('button');if(!b||probeBusy)return;
+  const act=b.dataset.act,id=b.dataset.id;
+  if(act==='pick')pickReciter(id);
+  else if(act==='clear')await clearReciter(id);
+  else if(act==='probe'){
+    probeBusy=true;b.disabled=true;b.textContent='جارٍ الفحص...';
+    const r=recById(id),f=await probeReciter(r);
+    probeBusy=false;renderReciters();
+    $('probeMsg').textContent=f>=0?r.name+' ('+r.style+'): ✓ المصدر الناجح: '+okHost[r.id]:r.name+' ('+r.style+'): لم ينجح التحميل. '+okHost[r.id];
+  }
+};
+$('probeAll').onclick=async()=>{
+  if(probeBusy)return;
+  probeBusy=true;$('probeAll').disabled=true;
+  let ok=0;
+  for(let i=0;i<RECITERS.length;i++){
+    const r=RECITERS[i];
+    $('probeMsg').textContent='جارٍ الفحص '+(i+1)+' من '+RECITERS.length+': '+r.name+' ('+r.style+')';
+    if((await probeReciter(r))>=0)ok++;
+  }
+  probeBusy=false;$('probeAll').disabled=false;renderReciters();
+  $('probeMsg').textContent='انتهى الفحص: '+ok+' من '+RECITERS.length+' يعمل دون إنترنت.';
+};
+
+updateNote();
 refreshKnown();fillTimes();fillForm();renderPlan();
 refreshRecInfo();refreshRecList();
 loadTextCache().then(()=>onTextReady());
