@@ -39,9 +39,10 @@ input[type=file]{max-width:100%;margin:10px 0}
 <div id="result">لم تُحلّل تلاوة بعد.</div>
 </div>
 <div class="card">
-<h2>اختبار مقارنة الكلمات بالألوان</h2>
+<h2>مقارنة التلاوة بالمصحف المرجعي</h2>
 <p class="small">للاختبار الأول، ألصق هنا النص القرآني الذي كنت تسمّع منه. سنقارن النصين تقريبيًا. هذه مقارنة نصية وليست حكمًا على التجويد أو صحة التلاوة.</p>
-<textarea id="reference" rows="5" style="width:100%;box-sizing:border-box;border:1px solid #cbd5d9;border-radius:12px;padding:12px;font:inherit" placeholder="ألصق الآيات التي كنت تراجعها هنا بعد التسجيل"></textarea>
+<textarea id="reference" rows="5" readonly style="width:100%;box-sizing:border-box;border:1px solid #cbd5d9;border-radius:12px;padding:12px;font:inherit;background:#f3f7f5" placeholder="سيظهر هنا النص المرجعي المستخرج من المصحف المحمّل"></textarea>
+<p class="small">مرجع المقارنة: ملف القرآن الكريم المرفق مع النموذج فقط. هذه الخانة للعرض ولا يمكن تعديلها يدويًا.</p>
 <button id="compareBtn">مقارنة النصين بالألوان</button>
 <div id="comparison" style="line-height:2.2;font-size:1.15rem"></div>
 <p class="small"><span style="color:#16834a">● أخضر: كلمة متطابقة</span>　<span style="color:#c62828">● أحمر: كلمة مختلفة/محتمل استبدالها</span>　<span style="color:#b66a00">● برتقالي: كلمة محتمل إسقاطها من التلاوة</span></p>
@@ -51,16 +52,40 @@ const $ = id => document.getElementById(id);
 const status = (s) => { $('status').textContent = s; };
 const result = (s) => { $('result').textContent = s; };
 const BASE = 'https://huggingface.co/acibZ/tilawa-quran-onnx/resolve/main/';
-let ort, createTilawaSession, tilawaSession, micStream, recorder, recordedBlob, timerId, recordingStartedAt, lastTranscript = '', quranData = null;
+let ort, createTilawaSession, tilawaSession, micStream, recorder, recordedBlob, timerId, recordingStartedAt, lastTranscript = '', quranData = null, canonicalReference = '';
 
+const MODEL_CACHE_NAME = 'quran-murajaah-model-v1';
+async function fetchCached(name) {
+  const url = BASE + name;
+  // Cache Storage keeps the large ONNX file and supporting JSON files between visits.
+  if ('caches' in window) {
+    try {
+      const cache = await caches.open(MODEL_CACHE_NAME);
+      const saved = await cache.match(url);
+      if (saved) {
+        status(`استخدام ملف محفوظ: ${name}`);
+        return saved;
+      }
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`تعذّر تنزيل ${name} (${response.status})`);
+      try { await cache.put(url, response.clone()); } catch (e) { console.warn('تعذّر حفظ الملف في التخزين المؤقت', e); }
+      return response;
+    } catch (e) {
+      // If browser cache is unavailable, fall back to a normal network request.
+      if (e?.message?.startsWith('تعذّر تنزيل')) throw e;
+      console.warn('Cache Storage غير متاح، سيتم التنزيل بالطريقة العادية', e);
+    }
+  }
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`تعذّر تنزيل ${name} (${response.status})`);
+  return response;
+}
 async function fetchJson(name) {
-  const r = await fetch(BASE + name);
-  if (!r.ok) throw new Error(`تعذّر تنزيل ${name} (${r.status})`);
+  const r = await fetchCached(name);
   return r.json();
 }
 async function fetchBuffer(name) {
-  const r = await fetch(BASE + name);
-  if (!r.ok) throw new Error(`تعذّر تنزيل ${name} (${r.status})`);
+  const r = await fetchCached(name);
   return r.arrayBuffer();
 }
 $('loadBtn').addEventListener('click', async () => {
@@ -74,7 +99,7 @@ $('loadBtn').addEventListener('click', async () => {
     const core = await import('https://esm.sh/@tilawa/core@0.4.0?bundle');
     createTilawaSession = core.createTilawaSession;
 
-    status('جارٍ تنزيل ملفات النموذج والبيانات. اترك الصفحة مفتوحة…');
+    status('جارٍ تجهيز ملفات النموذج؛ سيُحفظ ما أمكن منها على هذا المتصفح لاستخدامه في الزيارات القادمة…');
     const [modelBuffer, vocab, quranCtcTokens, quran, metadata] = await Promise.all([
       fetchBuffer('fastconformer_full_mixed.onnx'),
       fetchJson('vocab.json'),
@@ -185,7 +210,7 @@ $('runBtn').addEventListener('click', async () => {
     lastTranscript = pred.transcript || '';
     window.__lastTranscript = lastTranscript;
     const directOK = Number(pred.surah) > 0 && Number(pred.ayah) > 0 && Number(pred.score) >= 0.35;
-    const autoMatch = findQuranMatch(lastTranscript, quranData);
+    const autoMatch = findQuranMatch(lastTranscript, quranData);\n    canonicalReference = autoMatch ? autoMatch.text : '';\n    $('reference').value = canonicalReference;
     const surahShow = directOK ? pred.surah : (autoMatch ? autoMatch.surah : 'لم يُحدّد');
     const ayahShow = directOK ? pred.ayah : (autoMatch ? autoMatch.ayah : 'لم يُحدّد');
     const endShow = directOK && pred.ayah_end && pred.ayah_end !== pred.ayah ? ' – ' + pred.ayah_end : '';
@@ -245,9 +270,9 @@ function findQuranMatch(transcript,data) {
   return best.verse&&best.score>=0.45?{...best.verse,text:best.text,score:best.score}:null;
 }
 document.getElementById('compareBtn').addEventListener('click',()=>{
-  const ref=normalizeArabic(document.getElementById('reference').value),rec=normalizeArabic(window.__lastTranscript||'');
+  const ref=normalizeArabic(canonicalReference),rec=normalizeArabic(window.__lastTranscript||'');
   const out=document.getElementById('comparison');
-  if(!ref.length||!rec.length){out.textContent='أدخل النص القرآني الصحيح في الخانة، ثم حلّل التسجيل واضغط المقارنة.';return;}
+  if(!ref.length||!rec.length){out.textContent='لم يُعثر على موضع موثوق في المصحف المرجعي. أعد التسجيل بوضوح؛ لن تتم المقارنة مع نص يدوي.';return;}
   if(ref.length*rec.length>250000){out.textContent='النص طويل للمقارنة في هذه النسخة؛ قسّمه إلى مقاطع أقصر.';return;}
   const n=ref.length,m=rec.length,dp=Array.from({length:n+1},()=>new Uint16Array(m+1));
   for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=ref[i]===rec[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
