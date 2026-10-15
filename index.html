@@ -288,6 +288,7 @@ const RECITERS=[
   {id:'ar.muhammadayoub',name:'محمد أيوب',style:'مرتّل',br:128,ev:['Muhammad_Ayyoub_128kbps']},
   {id:'ar.muhammadjibreel',name:'محمد جبريل',style:'مرتّل',br:128,ev:['Muhammad_Jibreel_128kbps']}
 ];
+const CACHE_NAME='ayah-audio';
 const recById=id=>RECITERS.find(r=>r.id===id)||RECITERS[0];
 function sourcesFor(r){
   const list=[
