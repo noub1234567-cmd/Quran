@@ -286,12 +286,22 @@ const RECITERS=[
   {id:'ar.hudhaify',name:'علي الحذيفي',style:'مرتّل',br:128,ev:['Hudhaify_128kbps']},
   {id:'ar.ajamy',name:'أحمد بن علي العجمي',style:'مرتّل',br:128,ev:['Ahmed_ibn_Ali_al-Ajamy_128kbps_ketaballah.net']},
   {id:'ar.muhammadayoub',name:'محمد أيوب',style:'مرتّل',br:128,ev:['Muhammad_Ayyoub_128kbps']},
-  {id:'ar.muhammadjibreel',name:'محمد جبريل',style:'مرتّل',br:128,ev:['Muhammad_Jibreel_128kbps']}
+  {id:'ar.muhammadjibreel',name:'محمد جبريل',style:'مرتّل',br:128,ev:['Muhammad_Jibreel_128kbps']},
+  {id:'ev.maher',name:'ماهر المعيقلي',style:'مرتّل',cdn:false,ev:['MaherAlMuaiqly128kbps','Maher_AlMuaiqly_128kbps']},
+  {id:'ev.dossary',name:'ياسر الدوسري',style:'مرتّل',cdn:false,ev:['Yasser_Ad-Dussary_128kbps']},
+  {id:'ev.ghamdi',name:'سعد الغامدي',style:'مرتّل (جودة منخفضة)',cdn:false,ev:['Ghamadi_40kbps']},
+  {id:'ev.fares',name:'فارس عباد',style:'مرتّل',cdn:false,ev:['Fares_Abbad_64kbps']},
+  {id:'ev.alijaber',name:'علي جابر',style:'مرتّل',cdn:false,ev:['Ali_Jaber_64kbps']},
+  {id:'ev.juhany',name:'عبد الله الجهني',style:'مرتّل',cdn:false,ev:['Abdullaah_3awwaad_Al-Juhaynee_128kbps']},
+  {id:'ev.hani',name:'هاني الرفاعي',style:'مرتّل',cdn:false,ev:['Hani_Rifai_192kbps','Hani_Rifai_64kbps']},
+  {id:'ev.basfar',name:'عبد الله بصفر',style:'مرتّل',cdn:false,ev:['Abdullah_Basfar_192kbps','Abdullah_Basfar_64kbps']},
+  {id:'ev.shatri',name:'أبو بكر الشاطري',style:'مرتّل',cdn:false,ev:['Abu_Bakr_Ash-Shaatree_128kbps','Abu_Bakr_Ash-Shaatree_64kbps']},
+  {id:'ev.bukhatir',name:'صلاح بو خاطر',style:'مرتّل',cdn:false,ev:['Salaah_AbdulRahman_Bukhatir_128kbps']}
 ];
 const CACHE_NAME='ayah-audio';
 const recById=id=>RECITERS.find(r=>r.id===id)||RECITERS[0];
 function sourcesFor(r){
-  const list=[
+  const list=r.cdn===false?[]:[
     (sn,a)=>'https://cdn.islamic.network/quran/audio/'+r.br+'/'+r.id+'/'+(OFFSET[sn-1]+a)+'.mp3',
     (sn,a)=>'https://cdn.islamic.app/quran/audio/'+r.id+'/'+(OFFSET[sn-1]+a)+'.mp3'
   ];
@@ -1284,7 +1294,7 @@ async function clearReciter(id){
   if(!confirm('حذف كل تحميلات '+r.name+' ('+r.style+')؟'))return;
   try{
     const c=await caches.open(CACHE_NAME),keys=await c.keys();
-    const prefix='https://cdn.islamic.network/quran/audio/'+r.br+'/'+r.id+'/';
+    const prefix=sourcesFor(r)[0](1,1).replace(/[^/]*$/,'');
     for(const k of keys)if(k.url.startsWith(prefix))await c.delete(k);
   }catch(e){}
   save(dlKey(r.id),[]);
