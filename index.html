@@ -51,11 +51,22 @@
   .ok{background:#d9f3e4;color:#14633a}
   .bad{background:#fde8ec;color:#e11d48}
   main[hidden],.card[hidden]{display:none}
+  .task{background:#f3faf9;border-radius:12px;padding:10px;margin-bottom:10px}
+  .rv{margin-top:8px;padding-top:8px;border-top:1px dashed #cfe3e0}
+  .late{color:#e11d48;margin-right:6px}
+  .srow{padding:8px 0;border-bottom:1px solid #e3efee;font-size:14px}
+  .alt.on{background:#0f766e;color:#fff}
+  .hzrow{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #e3efee}
+  .hzt{flex:1;font-size:14px}.hzt small{color:#5b7a77;display:block}
+  .hzrow button{flex:none;padding:8px 10px;font-size:14px;min-width:38px}
+  .hzrow .on{background:#0f766e;color:#fff}
+  details summary{cursor:pointer;color:#0f766e;font-weight:700;padding:6px 0}
+  .tip{background:#fff7e0;border-radius:10px;padding:10px;font-size:13px;margin-bottom:10px}
 </style>
 </head>
 <body>
 <header>حفظ القرآن</header>
-<div class="tabs"><button id="tab1" class="on">التكرار والتسجيل</button><button id="tab2">القراءة والاختبار</button></div>
+<div class="tabs"><button id="tab1" class="on">التكرار</button><button id="tab2">القراءة والاختبار</button><button id="tab3">الخطة</button></div>
 <main id="v1">
 
 <div class="card">
@@ -168,6 +179,81 @@
   </div>
 </main>
 
+<main id="v3" hidden>
+  <div class="card" id="todayCard" hidden>
+    <h2>مهام اليوم</h2>
+    <div id="todayBox"></div>
+  </div>
+
+  <div class="card" id="schCard" hidden>
+    <h2>الجدول</h2>
+    <div class="row"><button class="alt on" id="schWeek">أسبوعي</button><button class="alt" id="schMonth">شهري</button></div>
+    <p class="hint" id="schSum"></p>
+    <div id="schBox"></div>
+    <p class="hint">الجدول تقدير يفترض أنك تُنجز المهام في وقتها. وما تتأخر عنه يُرحَّل تلقائياً.</p>
+  </div>
+
+  <div class="card">
+    <h2>إعدادات الخطة</h2>
+    <label for="pSurah">بداية الحفظ الجديد: السورة</label>
+    <select id="pSurah"></select>
+    <label for="pAyah">من الآية</label>
+    <input id="pAyah" type="number" min="1" value="1" inputmode="numeric">
+    <label for="pOrder">بعد انتهاء السورة ننتقل إلى</label>
+    <select id="pOrder"><option value="asc">السورة التالية (تصاعدي)</option><option value="desc">السورة السابقة (تنازلي)</option></select>
+    <label for="pLevel">قدرتك</label>
+    <select id="pLevel"><option value="3">خفيف (3 آيات)</option><option value="5">متوسط (5 آيات)</option><option value="10">قوي (10 آيات)</option><option value="custom">مخصص</option></select>
+    <div class="row">
+      <div><label for="pType">قياس الهدف اليومي</label>
+        <select id="pType"><option value="ayah">آيات</option><option value="page">صفحات</option></select></div>
+      <div><label for="pN">المقدار</label><input id="pN" type="number" min="1" value="5" inputmode="numeric"></div>
+    </div>
+    <p class="hint" id="pageHint"></p>
+    <div class="row">
+      <div><label for="pCycleMode">دورة مراجعة المحفوظ</label>
+        <select id="pCycleMode"><option value="auto">تلقائي</option><option value="manual">يدوي</option></select></div>
+      <div><label for="pCycle">المدة (يوم)</label><input id="pCycle" type="number" min="1" max="365" value="30" inputmode="numeric"></div>
+    </div>
+    <div class="row">
+      <div><label for="pMinHizb">دقائق مراجعة الحزب</label><input id="pMinHizb" type="number" min="3" value="15" inputmode="numeric"></div>
+      <div><label for="pMaxRev">أقصى مراجعات قريبة يومياً</label><input id="pMaxRev" type="number" min="1" value="5" inputmode="numeric"></div>
+    </div>
+    <p class="hint" id="cycleInfo"></p>
+    <div class="row">
+      <div><label for="pNewTime">وقت الحفظ الجديد</label><select id="pNewTime"></select></div>
+      <div><label for="pNewMin">مدته (دقيقة)</label><input id="pNewMin" type="number" min="5" value="20" inputmode="numeric"></div>
+    </div>
+    <div class="row">
+      <div><label for="pRevTime">وقت المراجعة</label><select id="pRevTime"></select></div>
+      <div><label for="pRevMin">مدتها (دقيقة)</label><input id="pRevMin" type="number" min="5" value="20" inputmode="numeric"></div>
+    </div>
+    <button class="primary" id="pSave">حفظ الخطة</button>
+    <button class="alt" id="pDel" style="width:100%;margin-top:8px">حذف الخطة</button>
+    <p class="hint">لا توجد تذكيرات تلقائية. الأوقات للتنظيم فقط، وتظهر في «مهام اليوم».</p>
+  </div>
+
+  <div class="card">
+    <h2>محفوظي بالأحزاب</h2>
+    <p class="hint" id="hzMsg"></p>
+    <details id="hzDet"><summary>تحديد الأحزاب والأرباع المحفوظة</summary><div id="hzList"></div></details>
+    <p class="hint">اضغط «كامل» لتعليم الحزب كله، أو أرباعه (١–٤) واحداً واحداً. وهذا مفيد للسور الطويلة التي لم تُتمّها.</p>
+  </div>
+
+  <div class="card">
+    <h2>محفوظاتي السابقة</h2>
+    <p class="hint">السور المعلَّمة ★ في قائمة السور تُحتسب محفوظة تلقائياً. وهنا تضيف أجزاء من سور.</p>
+    <label for="oSurah">السورة</label>
+    <select id="oSurah"></select>
+    <div class="row">
+      <div><label for="oFrom">من آية</label><input id="oFrom" type="number" min="1" value="1" inputmode="numeric"></div>
+      <div><label for="oTo">إلى آية</label><input id="oTo" type="number" min="1" value="1" inputmode="numeric"></div>
+    </div>
+    <button class="primary" id="oAdd">إضافة</button>
+    <div id="oList" style="margin-top:10px"></div>
+    <p class="hint" id="oSum"></p>
+  </div>
+</main>
+
 <div id="bar"><div id="status">اضغط على سورة للاستماع</div><button id="stop">إيقاف</button></div>
 <audio id="player" preload="auto"></audio>
 
@@ -254,10 +340,15 @@ async function fetchText(btn){
     try{
       const r=await fetch(urls[i]);
       if(!r.ok){errs.push(i+':http '+r.status);continue;}
-      const t=buildText(await r.json());
+      const j=await r.json();
+      const t=buildText(j);
       if(!t){errs.push(i+':صيغة غير متوقعة');continue;}
       TEXT=t;
       try{const c=await caches.open('qtext');await c.put('text-v1',new Response(JSON.stringify(t)));}catch(e){}
+      const pg=extractPages(j);
+      if(pg){PAGES=pg;try{const c2=await caches.open('qtext');await c2.put('pages-v1',new Response(JSON.stringify(pg)));}catch(e){}}
+      const hq=extractHQ(j);
+      if(hq){HQ=hq;buildQR();try{const c3=await caches.open('qtext');await c3.put('hq-v1',new Response(JSON.stringify(hq)));}catch(e){}}
       onTextReady();return true;
     }catch(err){errs.push(i+':'+String(err&&err.message||err));}
   }
@@ -341,7 +432,7 @@ $('list').onclick=e=>{
   if(b.classList.contains('play')){setRange(s);$('reps').value=1;run(s,1,COUNTS[s-1],1);}
   else if(b.classList.contains('mem')){
     if(memorized.has(s))memorized.delete(s);else memorized.add(s);
-    save('mem',[...memorized]);refreshMem();
+    save('mem',[...memorized]);refreshMem();refreshKnown();renderPlan();
   }
   else downloadSurah(s,b);
 };
@@ -589,13 +680,15 @@ async function downloadSurah(s,btn){
 // ---- التبويبات ----
 let tInit=false;
 function showTab(n){
-  $('v1').hidden=n!==1;$('v2').hidden=n!==2;
-  $('tab1').classList.toggle('on',n===1);$('tab2').classList.toggle('on',n===2);
+  $('v1').hidden=n!==1;$('v2').hidden=n!==2;$('v3').hidden=n!==3;
+  ['tab1','tab2','tab3'].forEach((id,i)=>$(id).classList.toggle('on',i+1===n));
+  if(n===3){fillForm();renderPlan();}
   if(n===2&&!tInit){tInit=true;$('tSurah').value=$('surah').value;$('tFrom').value=$('from').value;$('tTo').value=$('to').value;renderRead();}
   window.scrollTo(0,0);
 }
 $('tab1').onclick=()=>showTab(1);
 $('tab2').onclick=()=>showTab(2);
+$('tab3').onclick=()=>showTab(3);
 
 // ---- القراءة ----
 NAMES.forEach((n,i)=>{const o=document.createElement('option');o.value=i+1;o.textContent=(i+1)+' - '+n;$('tSurah').appendChild(o);});
@@ -668,8 +761,428 @@ $('qHear').onclick=async()=>{
   if(my===token)statusEl.textContent=ok?'انتهى':'تعذّر تشغيل الصوت.';
 };
 
+
+// ---- الخطة ----
+let PAGES=null,HQ=null,QR=null,QLEN=null;
+let oldR=load('oldR',[]);
+let memQ=new Set(load('memQ',[]));
+let plan=load('plan',null);
+if(plan)plan=Object.assign({cycleMode:'auto',cycleDays:30,minHizb:15},plan);
+let KN=null,schMode='week';
+const INTERVALS=[1,3,7,14,30];
+const FRIENDLY=[3,5,7,10,14,20,30,45,60,90];
+const TIMES=['بعد الفجر','الضحى','بعد الظهر','بعد العصر','بعد المغرب','بعد العشاء','قبل النوم'];
+const WD=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const pad2=n=>String(n).padStart(3-1,'0');
+const fmtD=d=>d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+const todayStr=()=>fmtD(new Date());
+const addDays=(str,n)=>{const d=new Date(str+'T12:00:00');d.setDate(d.getDate()+n);return fmtD(d);};
+const dayDiff=(a,b)=>Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/864e5);
+const dayLabel=str=>{const d=new Date(str+'T12:00:00');return WD[d.getDay()]+' '+d.getDate()+'/'+(d.getMonth()+1);};
+const rangeTxt=c=>NAMES[c.s-1]+' '+(c.a1===c.a2?'آية '+c.a1:'الآيات '+c.a1+'–'+c.a2);
+const savePlan=()=>save('plan',plan);
+const BTN_LOAD='تحميل بيانات المصحف (الصفحات والأحزاب)';
+
+// ---- بيانات المصحف: الصفحات وأرباع الأحزاب ----
+function extractField(j,field,max){
+  if(!(j&&j.data&&j.data.surahs))return null;
+  const out=COUNTS.map(()=>[]);
+  j.data.surahs.forEach(su=>su.ayahs.forEach(ay=>{
+    if(su.number>=1&&su.number<=114&&Number.isInteger(ay[field])&&ay[field]>=1&&ay[field]<=max)out[su.number-1][ay.numberInSurah-1]=ay[field];
+  }));
+  let prev=0;
+  for(let i=0;i<114;i++){
+    if(out[i].length!==COUNTS[i])return null;
+    for(const v of out[i]){if(!v||v<prev)return null;prev=v;}
+  }
+  return out;
+}
+const extractPages=j=>extractField(j,'page',604);
+const extractHQ=j=>{
+  const o=extractField(j,'hizbQuarter',240);
+  if(!o)return null;
+  return o[113][COUNTS[113]-1]===240?o:null;
+};
+function buildQR(){
+  if(!HQ){QR=null;QLEN=null;return;}
+  QR=Array.from({length:241},()=>[]);QLEN=new Array(241).fill(0);
+  for(let sn=1;sn<=114;sn++){
+    for(let a=1;a<=COUNTS[sn-1];a++){
+      const q=HQ[sn-1][a-1];QLEN[q]++;
+      const L=QR[q],last=L[L.length-1];
+      if(last&&last.s===sn&&last.a2===a-1)last.a2=a;else L.push({s:sn,a1:a,a2:a});
+    }
+  }
+}
+const wAy=(sn,a)=>(HQ&&QLEN)?1/QLEN[HQ[sn-1][a-1]]:1/26;
+const qOf=(sn,a1,a2)=>{let x=0;for(let a=a1;a<=a2;a++)x+=wAy(sn,a);return x;};
+const qLabel=q=>'الحزب '+Math.ceil(q/4)+' ربع '+((q-1)%4+1);
+function qSpan(c){
+  if(!HQ)return '';
+  const q1=HQ[c.s-1][c.a1-1],q2=HQ[c.s-1][c.a2-1];
+  return q1===q2?qLabel(q1):qLabel(q1)+' ← '+qLabel(q2);
+}
+const fmtQ=q=>q<0.05?'—':(q<4?q.toFixed(1)+' ربع':(q/4).toFixed(1)+' حزب');
+async function loadPagesCache(){
+  try{
+    const c=await caches.open('qtext');
+    let r=await c.match('pages-v1');if(r){const p=await r.json();if(p&&p.length===114)PAGES=p;}
+    r=await c.match('hq-v1');if(r){const h=await r.json();if(h&&h.length===114){HQ=h;buildQR();}}
+  }catch(e){}
+}
+async function fetchPages(btn){
+  if(btn){btn.disabled=true;btn.textContent='جارٍ التحميل...';}
+  try{
+    const r=await fetch('https://api.alquran.cloud/v1/quran/quran-uthmani');
+    if(!r.ok)throw new Error('http '+r.status);
+    const j=await r.json();
+    const p=extractPages(j),h=extractHQ(j);
+    if(!p&&!h)throw new Error('البيانات غير متوفرة في المصدر');
+    const c=await caches.open('qtext');
+    if(p){PAGES=p;try{await c.put('pages-v1',new Response(JSON.stringify(p)));}catch(e){}}
+    if(h){HQ=h;buildQR();try{await c.put('hq-v1',new Response(JSON.stringify(h)));}catch(e){}}
+    refreshKnown();renderPlan();return true;
+  }catch(err){
+    alert('تعذّر تحميل بيانات المصحف.\nالسبب التقني: '+(err&&err.message||err)+'\nسيعمل التطبيق بالآيات، ويُقدَّر الحزب والصفحة تقريباً.');
+  }
+  if(btn){btn.disabled=false;btn.textContent=BTN_LOAD;}
+  return false;
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.loadPages');if(b)fetchPages(b);});
+
+// ---- المحفوظ المعروف ----
+function refreshKnown(){
+  KN=COUNTS.map(c=>new Array(c).fill(false));
+  memorized.forEach(sn=>{if(KN[sn-1])KN[sn-1].fill(true);});
+  oldR.forEach(r=>{for(let a=r.a1;a<=r.a2;a++)KN[r.s-1][a-1]=true;});
+  if(QR)memQ.forEach(q=>{(QR[q]||[]).forEach(r=>{for(let a=r.a1;a<=r.a2;a++)KN[r.s-1][a-1]=true;});});
+}
+const isKnown=(sn,a)=>KN[sn-1][a-1];
+function knownRanges(){
+  const out=[];
+  for(let sn=1;sn<=114;sn++){
+    let a=1;const n=COUNTS[sn-1];
+    while(a<=n){
+      if(KN[sn-1][a-1]){let b=a;while(b<n&&KN[sn-1][b])b++;out.push({s:sn,a1:a,a2:b});a=b+1;}
+      else a++;
+    }
+  }
+  return out;
+}
+function knownQ(){
+  let q=0;
+  for(let sn=1;sn<=114;sn++)for(let a=1;a<=COUNTS[sn-1];a++)if(KN[sn-1][a-1])q+=wAy(sn,a);
+  return q;
+}
+function knownAyahs(){return knownRanges().reduce((x,r)=>x+r.a2-r.a1+1,0);}
+
+// ---- دورة مراجعة المحفوظ بالأحزاب ----
+function computeCycle(P){
+  const kq=knownQ(),kh=kq/4,minQ=P.minHizb/4,budget=Math.max(1,P.revMin*0.7);
+  const auto=P.cycleMode!=='manual';
+  let days;
+  if(auto){
+    days=kh<=4?3:kh<=10?7:kh<=20?14:30;
+    let i=FRIENDLY.indexOf(days);
+    while(i<FRIENDLY.length-1&&(kq/FRIENDLY[i])*minQ>budget)i++;
+    days=FRIENDLY[i];
+  }else days=Math.max(1,Math.round(P.cycleDays)||30);
+  const qDay=kq/days,min=qDay*minQ;
+  return {kq,kh,days,qDay,min,budget,auto,over:min>budget+1e-9};
+}
+function takeOldQ(ptr,quota,R){
+  const T=R.reduce((x,r)=>x+r.a2-r.a1+1,0);
+  if(!T)return {parts:[],n:0,T:0,q:0};
+  let idx=ptr%T,i=0;
+  while(idx>=R[i].a2-R[i].a1+1){idx-=R[i].a2-R[i].a1+1;i++;}
+  let a=R[i].a1+idx,acc=0,n=0,cur=null;const parts=[];
+  while(acc<quota-1e-9&&n<T){
+    const r=R[i];
+    if(cur&&cur.s===r.s&&a===cur.a2+1)cur.a2=a;
+    else{cur={s:r.s,a1:a,a2:a};parts.push(cur);}
+    acc+=wAy(r.s,a);n++;
+    if(a<r.a2)a++;else{i=(i+1)%R.length;a=R[i].a1;}
+  }
+  return {parts,n,T,q:acc};
+}
+
+// ---- تسلسل الحفظ الجديد ----
+function nextPos(pos,order){
+  const sn=pos.s,a=pos.a;
+  if(a<COUNTS[sn-1])return {s:sn,a:a+1};
+  if(order==='asc')return sn<114?{s:sn+1,a:1}:null;
+  return sn>1?{s:sn-1,a:1}:null;
+}
+function skipKnown(pos,order){
+  let g=0;
+  while(pos&&isKnown(pos.s,pos.a)&&g++<7000)pos=nextPos(pos,order);
+  return pos;
+}
+function genChunk(pos,P){
+  pos=skipKnown(pos,P.order);
+  if(!pos)return null;
+  const sn=pos.s,a=pos.a,last=COUNTS[sn-1];
+  let e=a;
+  if(P.goalType==='page'&&PAGES){
+    const lim=PAGES[sn-1][a-1]+Math.max(1,Math.round(P.goalN))-1;
+    while(e<last&&PAGES[sn-1][e]<=lim&&!isKnown(sn,e+1))e++;
+  }else{
+    const n=P.goalType==='page'?Math.max(1,Math.round(P.goalN*10)):Math.max(1,Math.round(P.goalN));
+    while(e<last&&e-a+1<n&&!isKnown(sn,e+1))e++;
+  }
+  return {s:sn,a1:a,a2:e,next:nextPos({s:sn,a:e},P.order)};
+}
+
+// ---- مراجعة المقاطع الجديدة ----
+function allKnownRange(c){for(let a=c.a1;a<=c.a2;a++)if(!isKnown(c.s,a))return false;return true;}
+function applyReview(c,good,t){
+  // يعيد true إذا تخرّج المقطع إلى الدورة الطويلة
+  if(good&&c.stage+1>=INTERVALS.length-1){
+    if(!allKnownRange(c))oldR.push({s:c.s,a1:c.a1,a2:c.a2,auto:true});
+    save('oldR',oldR);refreshKnown();
+    plan.chunks=plan.chunks.filter(x=>x.id!==c.id);
+    return true;
+  }
+  c.stage=good?c.stage+1:0;
+  c.due=addDays(t,INTERVALS[c.stage]);
+  return false;
+}
+function ensureToday(){
+  if(!plan)return;
+  const t=todayStr();
+  if(!plan.ts||plan.ts.date!==t)plan.ts={date:t,newDone:false,newChunk:null,revCount:0,oldDone:false};
+  if(!plan.log)plan.log={};
+}
+function todayTasks(){
+  ensureToday();
+  const t=todayStr(),R=knownRanges(),cyc=computeCycle(plan);
+  const res={new:null,due:[],extra:0,old:null,cyc};
+  if(plan.ts.newDone)res.new={done:true,chunk:plan.ts.newChunk};
+  else{const c=plan.pos?genChunk(plan.pos,plan):null;res.new={done:false,chunk:c,finished:!c};}
+  const due=plan.chunks.filter(c=>c.due<=t).sort((x,y)=>x.due.localeCompare(y.due));
+  res.due=due.slice(0,plan.maxRev);res.extra=Math.max(0,due.length-plan.maxRev);
+  if(cyc.qDay>0&&R.length){
+    if(plan.ts.oldDone)res.old={done:true};
+    else{const o=takeOldQ(plan.oldPtr,cyc.qDay,R);res.old={done:false,parts:o.parts,n:o.n,q:o.q};}
+  }
+  return res;
+}
+function missedDays(){
+  let m=0;const t=todayStr();
+  for(let i=1;i<=7;i++){const d=addDays(t,-i);if(d>=plan.created&&!plan.log[d])m++;}
+  return m;
+}
+function simulate(days){
+  const t=todayStr(),R=knownRanges(),cyc=computeCycle(plan);
+  let pos=plan.pos?{s:plan.pos.s,a:plan.pos.a}:null,ptr=plan.oldPtr;
+  let ch=plan.chunks.map(c=>({s:c.s,a1:c.a1,a2:c.a2,stage:c.stage,due:c.due})),rows=[];
+  for(let i=0;i<days;i++){
+    const d=addDays(t,i),row={d,new:null,rev:0,revQ:0,oldQ:0,doneNew:false};
+    if(i===0&&plan.ts&&plan.ts.newDone)row.doneNew=true;
+    else if(pos){
+      const c=genChunk(pos,plan);
+      if(c){row.new=c;ch.push({s:c.s,a1:c.a1,a2:c.a2,stage:0,due:addDays(d,1)});pos=c.next;}
+    }
+    const due=ch.filter(c=>c.due<=d).sort((x,y)=>x.due.localeCompare(y.due)).slice(0,plan.maxRev);
+    due.forEach(c=>{
+      row.rev+=c.a2-c.a1+1;row.revQ+=qOf(c.s,c.a1,c.a2);
+      if(c.stage+1>=INTERVALS.length-1)c.grad=true;
+      else{c.stage++;c.due=addDays(d,INTERVALS[c.stage]);}
+    });
+    ch=ch.filter(c=>!c.grad);
+    if(cyc.qDay>0&&R.length&&!(i===0&&plan.ts&&plan.ts.oldDone)){const o=takeOldQ(ptr,cyc.qDay,R);row.oldQ=o.q;ptr+=o.n;}
+    rows.push(row);
+  }
+  return rows;
+}
+
+// ---- عرض ----
+function renderToday(){
+  const t=todayTasks(),box=$('todayBox');
+  let h='';
+  if(missedDays()>=3)h+=`<div class="tip">لم تُنجز الحفظ الجديد في ${missedDays()} أيام من آخر 7. إن كان الهدف ثقيلاً فخفّفه قليلاً. <button class="alt" data-act="lower" style="flex:none;padding:6px 10px;margin-top:6px">قلّل الهدف 20%</button></div>`;
+  h+=`<div class="task"><b>① الحفظ الجديد</b> <small>(${plan.newTime} · ${plan.newMin} د)</small><br>`;
+  if(t.new.done)h+='✓ تم اليوم: '+rangeTxt(t.new.chunk);
+  else if(t.new.finished)h+='🎉 أتممت كل ما في الخطة.';
+  else{
+    const c=t.new.chunk;
+    h+=rangeTxt(c)+(HQ?`<br><small>${qSpan(c)}</small>`:'')+`<div class="row" style="margin-top:6px"><button class="alt" data-act="start" data-s="${c.s}" data-a1="${c.a1}" data-a2="${c.a2}" data-reps="10">▶ ابدأ</button><button class="alt ok" data-act="newdone">✓ تم</button></div>`;
+  }
+  h+='</div>';
+  h+=`<div class="task"><b>② مراجعة قريبة</b> <small>(${plan.revTime} · ${plan.revMin} د)</small>`;
+  if(!t.due.length)h+='<br>لا توجد مراجعة مستحقة اليوم ✓';
+  t.due.forEach(c=>{
+    const late=dayDiff(c.due,todayStr());
+    h+=`<div class="rv">${rangeTxt(c)}${late>0?`<small class="late">متأخرة ${late} يوم</small>`:''}${HQ?`<br><small>${qSpan(c)}</small>`:''}<div class="row" style="margin-top:6px"><button class="alt" data-act="start" data-s="${c.s}" data-a1="${c.a1}" data-a2="${c.a2}" data-reps="3">▶ ابدأ</button><button class="alt ok" data-act="good" data-id="${c.id}">✓ جيدة</button><button class="alt bad" data-act="weak" data-id="${c.id}">↻ ضعيفة</button></div></div>`;
+  });
+  if(t.extra)h+=`<br><small>+${t.extra} مراجعة أخرى تُرحَّل للأيام القادمة تدريجياً.</small>`;
+  if(plan.ts.revCount)h+=`<br><small>أنجزت اليوم: ${plan.ts.revCount} مراجعة</small>`;
+  h+='</div>';
+  if(t.old){
+    h+=`<div class="task"><b>③ مراجعة المحفوظ</b> <small>(دورة كل ${t.cyc.days} يوماً · ${plan.revTime})</small>`;
+    if(t.old.done)h+='<br>✓ تمت اليوم';
+    else{
+      h+=`<br><small>مقدار اليوم ≈ ${fmtQ(t.old.q)}</small>`;
+      t.old.parts.forEach(c=>{h+=`<div class="rv">${rangeTxt(c)}${HQ?`<br><small>${qSpan(c)}</small>`:''}<div class="row" style="margin-top:6px"><button class="alt" data-act="start" data-s="${c.s}" data-a1="${c.a1}" data-a2="${c.a2}" data-reps="1">▶ ابدأ</button><button class="alt bad" data-act="oldweak" data-s="${c.s}" data-a1="${c.a1}" data-a2="${c.a2}">↻ ضعيف</button></div></div>`;});
+      h+=`<div class="row" style="margin-top:8px"><button class="alt ok" data-act="olddone">✓ تمت مراجعة الكل</button></div>`;
+    }
+    h+='</div>';
+  }
+  box.innerHTML=h;
+}
+function renderSchedule(){
+  const days=schMode==='week'?7:30,rows=simulate(days);
+  let ay=0,nq=0;const pg=new Set();
+  rows.forEach(r=>{if(r.new){ay+=r.new.a2-r.new.a1+1;nq+=qOf(r.new.s,r.new.a1,r.new.a2);if(PAGES){for(let a=r.new.a1;a<=r.new.a2;a++)pg.add(PAGES[r.new.s-1][a-1]);}}});
+  const pages=PAGES?pg.size:Math.round(ay/10.3);
+  $('schSum').textContent=`الحفظ الجديد المتوقع: ${ay} آية (${PAGES?'':'≈ '}${pages} صفحة · ${(nq/4).toFixed(2)} حزب${HQ?'':' تقريباً'}) خلال ${days===7?'الأسبوع':'30 يوماً'}. الأرقام تقديرية.`;
+  $('schBox').innerHTML=rows.map(r=>`<div class="srow"><b>${dayLabel(r.d)}</b> · ${r.doneNew?'جديد: ✓ تم':r.new?'جديد: '+rangeTxt(r.new):'جديد: —'}<br><small>مراجعة قريبة: ${fmtQ(r.revQ)} · مراجعة المحفوظ: ${fmtQ(r.oldQ)}</small></div>`).join('');
+  $('schWeek').classList.toggle('on',schMode==='week');$('schMonth').classList.toggle('on',schMode==='month');
+}
+function renderOld(){
+  const box=$('oList');box.innerHTML='';
+  if(!oldR.length)box.innerHTML='<p class="hint">لم تضف أجزاء بعد.</p>';
+  oldR.forEach((r,i)=>{
+    const d=document.createElement('div');d.className='item';
+    d.innerHTML=`<div style="flex:1;padding:12px">${rangeTxt(r)}${r.auto?' <small>(من الخطة)</small>':''}</div><button class="rdel" data-i="${i}">حذف</button>`;
+    box.appendChild(d);
+  });
+  const kq=knownQ();
+  $('oSum').textContent=`مجموع المحفوظ المحتسب: ${(kq/4).toFixed(1)} حزباً${HQ?'':' (تقريباً)'} · ${knownAyahs()} آية (يشمل السور المعلَّمة ★ والأرباع).`;
+}
+function renderHz(){
+  const msg=$('hzMsg'),list=$('hzList');
+  if(!HQ){
+    msg.innerHTML='بيانات الأحزاب غير محمّلة. <button class="alt loadPages" style="flex:none;padding:8px 12px">'+BTN_LOAD+'</button>';
+    list.innerHTML='';return;
+  }
+  msg.innerHTML='';
+  let h='';
+  for(let hz=1;hz<=60;hz++){
+    const q1=(hz-1)*4+1,st=QR[q1][0];
+    const all=[0,1,2,3].every(k=>memQ.has(q1+k));
+    h+=`<div class="hzrow"><div class="hzt">الحزب ${hz}<small>${NAMES[st.s-1]} ${st.a1}</small></div><button class="alt ${all?'on':''}" data-h="${hz}">كامل</button>`;
+    for(let k=0;k<4;k++)h+=`<button class="alt ${memQ.has(q1+k)?'on':''}" data-q="${q1+k}">${k+1}</button>`;
+    h+='</div>';
+  }
+  list.innerHTML=h;
+}
+function renderPlan(){
+  if(!KN)refreshKnown();
+  $('todayCard').hidden=!plan;$('schCard').hidden=!plan;
+  if(plan){ensureToday();renderToday();renderSchedule();}
+  renderOld();renderHz();updateCycleInfo();
+  $('pageHint').innerHTML=($('pType').value==='page'&&!PAGES)?'بيانات الصفحات غير محمّلة، فيُقدَّر عدد الصفحات تقريباً. <button class="alt loadPages" style="flex:none;padding:8px 12px">'+BTN_LOAD+'</button>':'';
+}
+function readP(){
+  return {order:$('pOrder').value,goalType:$('pType').value,goalN:Math.max(1,+$('pN').value||1),
+    cycleMode:$('pCycleMode').value,cycleDays:Math.max(1,Math.min(365,+$('pCycle').value||30)),minHizb:Math.max(3,+$('pMinHizb').value||15),
+    maxRev:Math.max(1,+$('pMaxRev').value||5),newTime:$('pNewTime').value,newMin:+$('pNewMin').value||20,revTime:$('pRevTime').value,revMin:+$('pRevMin').value||20};
+}
+function updateCycleInfo(){
+  if(!KN)refreshKnown();
+  const P=readP(),c=computeCycle(P);
+  $('pCycle').disabled=c.auto;
+  if(c.auto)$('pCycle').value=c.days;
+  if(c.kq<0.05){$('cycleInfo').textContent='لم تحدد محفوظاً بعد، فلا توجد مراجعة للمحفوظ حالياً.';return;}
+  let t=`محفوظك: ${c.kh.toFixed(1)} حزباً${HQ?'':' (تقريباً)'}. دورة المراجعة: كل ${c.days} يوماً${c.auto?' (تلقائي)':''} ← نحو ${c.qDay.toFixed(1)} ربع يومياً (≈ ${Math.round(c.min)} دقيقة).`;
+  if(c.over)t+=` ⚠ هذا أكثر من الوقت المتاح للمراجعة البعيدة (≈ ${Math.round(c.budget)} دقيقة، أي 70% من وقت المراجعة). زد وقت المراجعة أو أطل المدة.`;
+  $('cycleInfo').textContent=t;
+}
+function fillTimes(){
+  ['pNewTime','pRevTime'].forEach(id=>{$(id).innerHTML=TIMES.map(x=>`<option>${x}</option>`).join('');});
+}
+function fillForm(){
+  const P=plan||{start:{s:1,a:1},order:'asc',goalType:'ayah',goalN:5,cycleMode:'auto',cycleDays:30,minHizb:15,maxRev:5,newTime:'بعد الفجر',newMin:20,revTime:'بعد العصر',revMin:20};
+  $('pSurah').value=P.start.s;$('pAyah').value=P.start.a;$('pOrder').value=P.order;
+  $('pType').value=P.goalType;$('pN').value=P.goalN;$('pCycleMode').value=P.cycleMode;$('pCycle').value=P.cycleDays;
+  $('pMinHizb').value=P.minHizb;$('pMaxRev').value=P.maxRev;
+  $('pNewTime').value=P.newTime;$('pNewMin').value=P.newMin;$('pRevTime').value=P.revTime;$('pRevMin').value=P.revMin;
+  syncLevel();updateCycleInfo();
+}
+function syncLevel(){
+  const v=+$('pN').value;
+  $('pLevel').value=($('pType').value==='ayah'&&[3,5,10].includes(v))?String(v):'custom';
+}
+NAMES.forEach((n,i)=>{
+  ['pSurah','oSurah'].forEach(id=>{const o=document.createElement('option');o.value=i+1;o.textContent=(i+1)+' - '+n;$(id).appendChild(o);});
+});
+$('pLevel').onchange=()=>{const v=$('pLevel').value;if(v!=='custom'){$('pType').value='ayah';$('pN').value=v;}renderPlan();};
+$('pN').onchange=syncLevel;
+$('pType').onchange=()=>{syncLevel();renderPlan();};
+['pCycleMode','pCycle','pMinHizb','pRevMin'].forEach(id=>{$(id).onchange=updateCycleInfo;});
+$('pSave').onclick=()=>{
+  const sn=+$('pSurah').value,a=Math.min(COUNTS[sn-1],Math.max(1,+$('pAyah').value||1));
+  const P=readP();
+  if(!plan)plan=Object.assign({v:1,start:{s:sn,a},pos:{s:sn,a},chunks:[],oldPtr:0,created:todayStr(),log:{},ts:null},P);
+  else{
+    const changed=plan.start.s!==sn||plan.start.a!==a;
+    Object.assign(plan,P);
+    if(changed){plan.start={s:sn,a};plan.pos={s:sn,a};}
+  }
+  ensureToday();savePlan();$('pAyah').value=a;renderPlan();
+  statusEl.textContent='تم حفظ الخطة';window.scrollTo(0,0);
+};
+$('pDel').onclick=()=>{
+  if(!plan||!confirm('حذف الخطة وكل جدول المراجعة؟ (محفوظاتك السابقة تبقى)'))return;
+  plan=null;try{localStorage.removeItem('plan');}catch(e){}
+  renderPlan();
+};
+$('schWeek').onclick=()=>{schMode='week';if(plan)renderSchedule();};
+$('schMonth').onclick=()=>{schMode='month';if(plan)renderSchedule();};
+function gotoRepeat(sn,a1,a2,reps){
+  $('surah').value=sn;$('from').value=a1;$('to').value=a2;$('reps').value=reps;$('ay').value=a1;
+  renderMainFromInputs();refreshRecInfo();showTab(1);
+  statusEl.textContent='اضغط «ابدأ التكرار»';
+}
+$('todayBox').onclick=e=>{
+  const b=e.target.closest('button');if(!b||!plan)return;
+  const act=b.dataset.act,t=todayStr();
+  if(act==='start'){gotoRepeat(+b.dataset.s,+b.dataset.a1,+b.dataset.a2,+b.dataset.reps);return;}
+  if(act==='newdone'){
+    const c=todayTasks().new.chunk;if(!c)return;
+    plan.chunks.push({id:Date.now(),s:c.s,a1:c.a1,a2:c.a2,stage:0,due:addDays(t,1),created:t});
+    plan.pos=c.next;plan.ts.newDone=true;plan.ts.newChunk={s:c.s,a1:c.a1,a2:c.a2};plan.log[t]=true;
+  }else if(act==='good'||act==='weak'){
+    const c=plan.chunks.find(x=>x.id===+b.dataset.id);if(!c)return;
+    applyReview(c,act==='good',t);plan.ts.revCount++;
+  }else if(act==='olddone'){
+    const o=takeOldQ(plan.oldPtr,computeCycle(plan).qDay,knownRanges());plan.oldPtr+=o.n;plan.ts.oldDone=true;
+  }else if(act==='oldweak'){
+    plan.chunks.push({id:Date.now(),s:+b.dataset.s,a1:+b.dataset.a1,a2:+b.dataset.a2,stage:0,due:addDays(t,1),created:t});
+    statusEl.textContent='سيعود هذا الجزء للمراجعة القريبة غداً';
+  }else if(act==='lower'){
+    plan.goalN=Math.max(1,Math.floor(plan.goalN*0.8));
+  }
+  savePlan();renderPlan();
+};
+$('hzList').onclick=e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.q){const q=+b.dataset.q;if(memQ.has(q))memQ.delete(q);else memQ.add(q);}
+  else if(b.dataset.h){
+    const q1=(+b.dataset.h-1)*4+1,qs=[0,1,2,3].map(k=>q1+k),all=qs.every(q=>memQ.has(q));
+    qs.forEach(q=>{if(all)memQ.delete(q);else memQ.add(q);});
+  }else return;
+  save('memQ',[...memQ]);refreshKnown();renderPlan();
+};
+$('oAdd').onclick=()=>{
+  const sn=+$('oSurah').value,max=COUNTS[sn-1];
+  let a1=Math.max(1,+$('oFrom').value||1),a2=Math.min(max,+$('oTo').value||max);
+  if(a1>a2)[a1,a2]=[a2,a1];
+  a1=Math.min(a1,max);
+  oldR.push({s:sn,a1,a2});save('oldR',oldR);refreshKnown();renderPlan();
+};
+$('oSurah').onchange=()=>{$('oFrom').value=1;$('oTo').value=COUNTS[+$('oSurah').value-1];};
+$('oList').onclick=e=>{
+  const b=e.target.closest('button');if(!b)return;
+  oldR.splice(+b.dataset.i,1);save('oldR',oldR);refreshKnown();renderPlan();
+};
+// ---- نهاية الخطة ----
+
+refreshKnown();fillTimes();fillForm();renderPlan();
 refreshRecInfo();refreshRecList();
 loadTextCache().then(()=>onTextReady());
+loadPagesCache().then(()=>renderPlan());
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
 </body>
