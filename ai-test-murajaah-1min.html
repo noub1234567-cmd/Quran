@@ -51,7 +51,7 @@ const $ = id => document.getElementById(id);
 const status = (s) => { $('status').textContent = s; };
 const result = (s) => { $('result').textContent = s; };
 const BASE = 'https://huggingface.co/acibZ/tilawa-quran-onnx/resolve/main/';
-let ort, createTilawaSession, tilawaSession, micStream, recorder, recordedBlob, timerId, recordingStartedAt, lastTranscript = '';
+let ort, createTilawaSession, tilawaSession, micStream, recorder, recordedBlob, timerId, recordingStartedAt, lastTranscript = '', quranData = null;
 
 async function fetchJson(name) {
   const r = await fetch(BASE + name);
@@ -82,6 +82,7 @@ $('loadBtn').addEventListener('click', async () => {
       fetchJson('quran.json'),
       fetchJson('export_metadata.json')
     ]);
+    quranData = quran;
     status('تم تنزيل الملفات. جارٍ تهيئة النموذج على الهاتف…');
     const session = await ort.InferenceSession.create(modelBuffer, { executionProviders: ['wasm'] });
     const runner = {
@@ -183,7 +184,16 @@ $('runBtn').addEventListener('click', async () => {
     const pred = await tilawaSession.transcribe(audio);
     lastTranscript = pred.transcript || '';
     window.__lastTranscript = lastTranscript;
-    result(`السورة: ${pred.surah ?? 'غير محددة'}\nالآية: ${pred.ayah ?? 'غير محددة'}${pred.ayah_end && pred.ayah_end !== pred.ayah ? ' – ' + pred.ayah_end : ''}\nدرجة المطابقة: ${pred.score == null ? 'غير متاحة' : Number(pred.score).toFixed(3)}\n\nالنص المتعرّف عليه:\n${pred.transcript || 'لم يُنتج النموذج نصًا واضحًا.'}`);
+    const directOK = Number(pred.surah) > 0 && Number(pred.ayah) > 0 && Number(pred.score) >= 0.35;
+    const autoMatch = findQuranMatch(lastTranscript, quranData);
+    const surahShow = directOK ? pred.surah : (autoMatch ? autoMatch.surah : 'لم يُحدّد');
+    const ayahShow = directOK ? pred.ayah : (autoMatch ? autoMatch.ayah : 'لم يُحدّد');
+    const endShow = directOK && pred.ayah_end && pred.ayah_end !== pred.ayah ? ' – ' + pred.ayah_end : '';
+    result(`السورة: ${surahShow}\nالآية: ${ayahShow}${endShow}\nدرجة المطابقة: ${pred.score == null ? 'غير متاحة' : Number(pred.score).toFixed(3)}\n\nالنص المتعرّف عليه:\n${lastTranscript || 'لم يُنتج النموذج نصًا واضحًا.'}`);
+    if (autoMatch && !directOK) {
+      $('reference').value = autoMatch.text;
+      $('comparison').textContent = 'عُثر على موضع قرآني محتمل تلقائيًا. اضغط «مقارنة النصين بالألوان» لمراجعته.';
+    }
     status('انتهى التحليل. تمت معالجة الصوت داخل المتصفح.');
   } catch(e) {
     console.error(e);
@@ -195,41 +205,60 @@ $('runBtn').addEventListener('click', async () => {
 });
 </script>
 <script>
-(function(){
-  const norm = s => (s || '').normalize('NFC')
-    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g,'')
-    .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي')
-    .replace(/[۞۩،؛:,.!?؟ـ]/g,' ')
-    .trim().split(/\s+/).filter(Boolean);
-  document.getElementById('compareBtn').addEventListener('click', () => {
-    const refRaw = document.getElementById('reference').value;
-    const recText = window.__lastTranscript || '';
-    const ref = norm(refRaw), rec = norm(recText);
-    const out = document.getElementById('comparison');
-    if (!ref.length || !rec.length) { out.textContent = 'أدخل النص المرجعي ثم حلّل التسجيل أولًا.'; return; }
-    // LCS-based alignment, to distinguish missing reference words from substitutions approximately.
-    const n=ref.length,m=rec.length;
-    if (n*m > 250000) { out.textContent='النص طويل جدًا للمقارنة في هذه النسخة؛ جرّب مقطعًا أقصر.'; return; }
-    const dp=Array.from({length:n+1},()=>new Uint16Array(m+1));
-    for(let i=n-1;i>=0;i--) for(let j=m-1;j>=0;j--)
-      dp[i][j]=ref[i]===rec[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
-    let i=0,j=0,html='';
-    while(i<n || j<m){
-      if(i<n && j<m && ref[i]===rec[j]){
-        html+=`<span style="color:#16834a">${escapeHtml(refRaw?ref[i]:'')}</span> `;
-        i++;j++;
-      } else if(i<n && (j===m || dp[i+1][j]>=dp[i][j+1])){
-        html+=`<span style="color:#b66a00" title="كلمة غير موجودة في النص المتعرّف عليه">${escapeHtml(ref[i])}</span> `;
-        i++;
-      } else {
-        html+=`<span style="color:#c62828" title="كلمة زائدة أو مستبدلة في النص المتعرّف عليه">${escapeHtml('↳ '+rec[j])}</span> `;
-        j++;
-      }
+function normalizeArabic(s) {
+  return (s || '').normalize('NFC').replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g,'')
+    .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ؤ/g,'و').replace(/ئ/g,'ي')
+    .replace(/[۞۩،؛:,.!?؟ـ()\[\]{}]/g,' ').trim().split(/\s+/).filter(Boolean);
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function flattenQuran(data) {
+  const out=[];
+  function walk(x) {
+    if (!x) return;
+    if (Array.isArray(x)) { for(const v of x) walk(v); return; }
+    if (typeof x!=='object') return;
+    const surah=Number(x.surah ?? x.surah_number ?? x.chapter ?? x.chapter_number);
+    const ayah=Number(x.ayah ?? x.ayah_number ?? x.verse ?? x.verse_number);
+    const text=x.text_uthmani ?? x.uthmani ?? x.text ?? x.verse_text ?? x.arabic;
+    if(surah>0&&ayah>0&&typeof text==='string'){out.push({surah,ayah,text,tokens:normalizeArabic(text)});return;}
+    Object.values(x).forEach(walk);
+  }
+  walk(data); return out.sort((a,b)=>a.surah-b.surah||a.ayah-b.ayah);
+}
+function findQuranMatch(transcript,data) {
+  const words=normalizeArabic(transcript); if(words.length<3||!data)return null;
+  const verses=flattenQuran(data); if(!verses.length)return null;
+  let best={score:0,verse:null,text:''};
+  for(let i=0;i<verses.length;i++){
+    let joined=[],parts=[];
+    for(let j=i;j<Math.min(i+8,verses.length);j++){
+      if(j>i&&(verses[j].surah!==verses[j-1].surah||verses[j].ayah!==verses[j-1].ayah+1))break;
+      joined.push(...verses[j].tokens);parts.push(verses[j].text);
+      if(joined.length<3)continue;
+      const counts=new Map();joined.forEach(w=>counts.set(w,(counts.get(w)||0)+1));
+      const used=new Map();let hit=0;
+      for(const w of words){const have=counts.get(w)||0,u=used.get(w)||0;if(u<have){hit++;used.set(w,u+1);}}
+      const precision=hit/words.length,recall=hit/joined.length,score=2*precision*recall/(precision+recall||1);
+      if(score>best.score)best={score,verse:verses[i],text:parts.join(' ')};
     }
-    out.innerHTML=html;
-  });
-  function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-})();
+  }
+  return best.verse&&best.score>=0.45?{...best.verse,text:best.text,score:best.score}:null;
+}
+document.getElementById('compareBtn').addEventListener('click',()=>{
+  const ref=normalizeArabic(document.getElementById('reference').value),rec=normalizeArabic(window.__lastTranscript||'');
+  const out=document.getElementById('comparison');
+  if(!ref.length||!rec.length){out.textContent='أدخل النص القرآني الصحيح في الخانة، ثم حلّل التسجيل واضغط المقارنة.';return;}
+  if(ref.length*rec.length>250000){out.textContent='النص طويل للمقارنة في هذه النسخة؛ قسّمه إلى مقاطع أقصر.';return;}
+  const n=ref.length,m=rec.length,dp=Array.from({length:n+1},()=>new Uint16Array(m+1));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=ref[i]===rec[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+  let i=0,j=0,html='',ok=0,missing=0,extra=0;
+  while(i<n||j<m){
+    if(i<n&&j<m&&ref[i]===rec[j]){html+=`<span style="color:#16834a">${escapeHtml(ref[i])}</span> `;i++;j++;ok++;}
+    else if(i<n&&(j===m||dp[i+1][j]>=dp[i][j+1])){html+=`<span style="color:#b66a00" title="كلمة مرجعية لم تظهر في النص المتعرف عليه">${escapeHtml(ref[i])}</span> `;i++;missing++;}
+    else{html+=`<span style="color:#c62828" title="كلمة زائدة أو مختلفة في النص المتعرف عليه">${escapeHtml('↳ '+rec[j])}</span> `;j++;extra++;}
+  }
+  out.innerHTML=`<p><b>تطابق الكلمات التقريبي: ${Math.round(ok/Math.max(n,1)*100)}%</b></p><p>${html}</p><p class="small">متطابقة: ${ok} — محتمل إسقاطها: ${missing} — زائدة/مختلفة: ${extra}. هذه مقارنة نصية وليست حكمًا على التجويد.</p>`;
+});
 </script>
 </body>
 </html>
