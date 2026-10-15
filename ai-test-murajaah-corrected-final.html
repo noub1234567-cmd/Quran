@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>اختبار مراجعة الحفظ — نسخة مصححة</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#17212b;background:#f4f7f8}
+body{margin:0;padding:18px;max-width:760px;margin-inline:auto}
+h1{font-size:1.55rem;line-height:1.5}
+.card{background:#fff;border:1px solid #dce3e5;border-radius:18px;padding:18px;margin:16px 0;box-shadow:0 2px 8px #00000008}
+button,.pick{border:0;border-radius:12px;padding:14px 18px;font-size:1rem;background:#17694f;color:white;display:inline-block;margin:6px 4px 6px 0}
+button:disabled{opacity:.45}
+input[type=file]{max-width:100%;margin:10px 0}
+#status{background:#edf4f1;padding:14px;border-radius:12px;white-space:pre-wrap;line-height:1.7}
+#result{font-size:1.15rem;line-height:2}
+.small{font-size:.9rem;color:#52616a;line-height:1.7}
+</style>
+</head>
+<body>
+<h1>اختبار مراجعة الحفظ — FastConformer</h1>
+<div class="card">
+<p><b>هذه صفحة اختبار مستقلة.</b> عند أول استخدام تحتاج إلى الإنترنت لتنزيل النموذج والملفات المساعدة. في الزيارات القادمة سيحاول المتصفح استخدام الملفات المحفوظة بدل تنزيلها كاملةً من جديد، لكن تهيئة النموذج قد تستغرق بعض الوقت عند كل فتح.</p>
+<p class="small">يُعالج الصوت داخل المتصفح ولا يُرفع إلى خادم. لا تغلق الصفحة أثناء تحميل النموذج (حجمه نحو 88 ميغابايت).</p>
+<button id="loadBtn">تحميل النموذج وتشغيله</button>
+<div id="status" role="status">اضغط «تحميل النموذج وتشغيله» للبدء.</div>
+</div>
+<div class="card">
+<h2>مصدر الصوت</h2>
+<button id="recordBtn" disabled>بدء التسجيل</button>
+<button id="stopBtn" disabled>إيقاف التسجيل</button>
+<p>أو اختر ملفًا صوتيًا:</p>
+<input id="audioFile" type="file" accept="audio/*">
+<p class="small">هذه نسخة تجريبية: التسجيل بحد أقصى دقيقة واحدة. قد تحتاج إلى السماح للمتصفح باستخدام الميكروفون.</p><p id="timer" class="small">مدة التسجيل: 00:00 / 01:00</p>
+<button id="runBtn" disabled>التعرّف على التلاوة</button>
+</div>
+<div class="card">
+<h2>النص الذي تعرّف عليه النموذج</h2>
+<div id="result">لم تُحلّل تلاوة بعد.</div>
+</div>
+<div class="card">
+<h2>مقارنة التلاوة بالمصحف المرجعي</h2>
+<p class="small">للاختبار الأول، ألصق هنا النص القرآني الذي كنت تسمّع منه. سنقارن النصين تقريبيًا. هذه مقارنة نصية وليست حكمًا على التجويد أو صحة التلاوة.</p>
+<textarea id="reference" rows="5" readonly style="width:100%;box-sizing:border-box;border:1px solid #cbd5d9;border-radius:12px;padding:12px;font:inherit;background:#f3f7f5" placeholder="سيظهر هنا النص المرجعي المستخرج من المصحف المحمّل"></textarea>
+<p class="small">مرجع المقارنة: ملف القرآن الكريم المرفق مع النموذج فقط. هذه الخانة للعرض ولا يمكن تعديلها يدويًا.</p>
+<button id="compareBtn">مقارنة النصين بالألوان</button>
+<div id="comparison" style="line-height:2.2;font-size:1.15rem"></div>
+<p class="small"><span style="color:#16834a">● أخضر: كلمة متطابقة</span>　<span style="color:#c62828">● أحمر: كلمة مختلفة/محتمل استبدالها</span>　<span style="color:#b66a00">● برتقالي: كلمة محتمل إسقاطها من التلاوة</span></p>
+</div>
+<script type="module">
+const $ = id => document.getElementById(id);
+const status = (s) => { $('status').textContent = s; };
+const result = (s) => { $('result').textContent = s; };
+const BASE = 'https://huggingface.co/acibZ/tilawa-quran-onnx/resolve/main/';
+let ort, createTilawaSession, tilawaSession, micStream, recorder, recordedBlob, timerId, recordingStartedAt, lastTranscript = '', quranData = null, canonicalReference = '';
+
+const MODEL_CACHE_NAME = 'quran-murajaah-model-v2';
+async function fetchCached(name) {
+  const url = BASE + name;
+  // Cache Storage keeps the large ONNX file and supporting JSON files between visits.
+  if ('caches' in window) {
+    try {
+      const cache = await caches.open(MODEL_CACHE_NAME);
+      const saved = await cache.match(url, {ignoreSearch:false});
+      if (saved) {
+        status(`استخدام ملف محفوظ: ${name}`);
+        return saved;
+      }
+      status(`جارٍ تنزيل ${name} لأول مرة أو تحديثه…`);\n      const response = await fetch(url, {cache:'default'});
+      if (!response.ok) throw new Error(`تعذّر تنزيل ${name} (${response.status})`);
+      try { await cache.put(url, response.clone()); } catch (e) { console.warn('تعذّر حفظ الملف في التخزين المؤقت', e); }
+      return response;
+    } catch (e) {
+      // If browser cache is unavailable, fall back to a normal network request.
+      if (e?.message?.startsWith('تعذّر تنزيل')) throw e;
+      console.warn('Cache Storage غير متاح، سيتم التنزيل بالطريقة العادية', e);
+    }
+  }
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`تعذّر تنزيل ${name} (${response.status})`);
+  return response;
+}
+async function fetchJson(name) {
+  const r = await fetchCached(name);
+  return r.json();
+}
+async function fetchBuffer(name) {
+  const r = await fetchCached(name);
+  return r.arrayBuffer();
+}
+$('loadBtn').addEventListener('click', async () => {
+  $('loadBtn').disabled = true;
+  try {
+    status('جارٍ تحميل مكتبة التشغيل…');
+    const ortMod = await import('https://esm.sh/onnxruntime-web@1.24.2');
+    ort = ortMod;
+    ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.2/dist/';
+    ort.env.wasm.numThreads = 1;
+    const core = await import('https://esm.sh/@tilawa/core@0.4.0?bundle');
+    createTilawaSession = core.createTilawaSession;
+
+    status('جارٍ تجهيز ملفات النموذج؛ سيُحفظ ما أمكن منها على هذا المتصفح لاستخدامه في الزيارات القادمة…');
+    const [modelBuffer, vocab, quranCtcTokens, quran, metadata] = await Promise.all([
+      fetchBuffer('fastconformer_full_mixed.onnx'),
+      fetchJson('vocab.json'),
+      fetchJson('quran_ctc_tokens.json'),
+      fetchJson('quran.json'),
+      fetchJson('export_metadata.json')
+    ]);
+    quranData = quran;
+    status('تم تنزيل الملفات. جارٍ تهيئة النموذج على الهاتف…');
+    const session = await ort.InferenceSession.create(modelBuffer, { executionProviders: ['wasm'] });
+    const runner = {
+      async run(audio) {
+        const input = new ort.Tensor('float32', audio, [1, audio.length]);
+        const length = new ort.Tensor('int64', BigInt64Array.from([BigInt(audio.length)]), [1]);
+        const outputs = await session.run({ audio_signal: input, length });
+        const output = outputs[session.outputNames[0]];
+        const [, timeSteps, vocabSize] = output.dims;
+        return { logprobs: output.data, timeSteps, vocabSize };
+      }
+    };
+    tilawaSession = createTilawaSession(runner, {
+      vocab, quranCtcTokens, quran,
+      blankId: metadata.blank_id
+    });
+    $('recordBtn').disabled = false;
+    $('runBtn').disabled = false;
+    const verseCount = flattenQuran(quranData).length;
+    status('نجح تحميل النموذج وتهيئته. يمكنك التسجيل أو اختيار ملف صوتي.' +
+      (verseCount ? `\\nتم تحميل المرجع القرآني: ${verseCount} آية.` :
+       '\\nتحذير: لم أستطع قراءة الآيات من quran.json؛ لن تعمل المقارنة حتى يُصلح تنسيق المرجع.'));
+  } catch (e) {
+    console.error(e);
+    status('تعذّر تشغيل النموذج:\n' + (e?.message || String(e)) +
+      '\nإذا كان الخطأ متعلقًا بالتنزيل، تحقق من الإنترنت ثم أعد تحميل الصفحة. إذا كان متعلقًا بذاكرة الهاتف أو WASM، أرسل صورة الخطأ.');
+    $('loadBtn').disabled = false;
+  }
+});
+
+async function to16kMono(blob) {
+  const raw = await blob.arrayBuffer();
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new AudioCtx();
+  try {
+    const decoded = await ctx.decodeAudioData(raw.slice(0));
+    const frames = Math.ceil(decoded.duration * 16000);
+    const offline = new OfflineAudioContext(1, frames, 16000);
+    const source = offline.createBufferSource();
+    source.buffer = decoded;
+    source.connect(offline.destination);
+    source.start(0);
+    const rendered = await offline.startRendering();
+    return rendered.getChannelData(0).slice();
+  } finally {
+    await ctx.close();
+  }
+}
+$('audioFile').addEventListener('change', () => {
+  recordedBlob = $('audioFile').files?.[0] || null;
+  if (recordedBlob) result('تم اختيار الملف: ' + recordedBlob.name + '\nاضغط «التعرّف على التلاوة».');
+});
+$('recordBtn').addEventListener('click', async () => {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    recordedBlob = null;
+    recorder = new MediaRecorder(micStream);
+    const chunks = [];
+    recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => {
+      clearInterval(timerId);
+      recordedBlob = new Blob(chunks, {type: recorder.mimeType || 'audio/webm'});
+      micStream?.getTracks().forEach(t => t.stop());
+      micStream = null;
+      $('runBtn').disabled = false;
+      result('اكتمل التسجيل. اضغط «التعرّف على التلاوة».');
+    };
+    recorder.start();
+    recordingStartedAt = Date.now();
+    $('timer').textContent = 'مدة التسجيل: 00:00 / 01:00';
+    timerId = setInterval(() => {
+      const sec = Math.floor((Date.now() - recordingStartedAt) / 1000);
+      $('timer').textContent = `مدة التسجيل: ${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')} / 01:00`;
+      if (sec >= 60 && recorder && recorder.state !== 'inactive') {
+        recorder.stop();
+        $('recordBtn').disabled = false;
+        $('stopBtn').disabled = true;
+        status('اكتملت الدقيقة التجريبية. اضغط «التعرّف على التلاوة».');
+      }
+    }, 250);
+    $('recordBtn').disabled = true;
+    $('stopBtn').disabled = false;
+    status('جارٍ التسجيل… اقرأ مقطعًا واضحًا ثم اضغط إيقاف التسجيل.');
+  } catch(e) {
+    status('تعذّر فتح الميكروفون: ' + (e?.message || String(e)) + '\nيمكنك اختيار ملف صوتي بدلًا منه.');
+  }
+});
+$('stopBtn').addEventListener('click', () => {
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+  $('recordBtn').disabled = false;
+  $('stopBtn').disabled = true;
+});
+$('runBtn').addEventListener('click', async () => {
+  if (!tilawaSession) return;
+  const file = recordedBlob || $('audioFile').files?.[0];
+  if (!file) { result('سجّل صوتًا أو اختر ملفًا صوتيًا أولًا.'); return; }
+  $('runBtn').disabled = true;
+  try {
+    status('جارٍ تجهيز الصوت محليًا وتحليله…');
+    const audio = await to16kMono(file);
+    if (!audio.length) throw new Error('ملف الصوت فارغ.');
+    const pred = await tilawaSession.transcribe(audio);
+    lastTranscript = pred.transcript || '';
+    window.__lastTranscript = lastTranscript;
+    const directOK = Number(pred.surah) > 0 && Number(pred.ayah) > 0 && Number(pred.score) >= 0.35;
+    const autoMatch = findQuranMatch(lastTranscript, quranData);\n    canonicalReference = autoMatch ? autoMatch.text : '';\n    $('reference').value = canonicalReference;
+    const surahShow = directOK ? pred.surah : (autoMatch ? autoMatch.surah : 'لم يُحدّد');
+    const ayahShow = directOK ? pred.ayah : (autoMatch ? autoMatch.ayah : 'لم يُحدّد');
+    const endShow = directOK && pred.ayah_end && pred.ayah_end !== pred.ayah ? ' – ' + pred.ayah_end : '';
+    result(`السورة: ${surahShow}\nالآية: ${ayahShow}${endShow}\nدرجة المطابقة: ${pred.score == null ? 'غير متاحة' : Number(pred.score).toFixed(3)}\n\nالنص المتعرّف عليه:\n${lastTranscript || 'لم يُنتج النموذج نصًا واضحًا.'}`);
+    if (autoMatch && !directOK) {
+      $('reference').value = autoMatch.text;
+      $('comparison').textContent = 'عُثر على موضع قرآني محتمل تلقائيًا. اضغط «مقارنة النصين بالألوان» لمراجعته.';
+    }
+    status('انتهى التحليل. تمت معالجة الصوت داخل المتصفح.');
+  } catch(e) {
+    console.error(e);
+    result('تعذّر تحليل الصوت.');
+    status('حدث خطأ أثناء التحليل:\n' + (e?.message || String(e)));
+  } finally {
+    $('runBtn').disabled = false;
+  }
+});
+</script>
+<script>
+function normalizeArabic(s) {
+  return (s || '').normalize('NFC').replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g,'')
+    .replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ؤ/g,'و').replace(/ئ/g,'ي')
+    .replace(/[۞۩،؛:,.!?؟ـ()\[\]{}]/g,' ').trim().split(/\s+/).filter(Boolean);
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function flattenQuran(data) {
+  const out=[];
+  function walk(x) {
+    if (!x) return;
+    if (Array.isArray(x)) { for(const v of x) walk(v); return; }
+    if (typeof x!=='object') return;
+    const surah=Number(x.surah ?? x.surah_number ?? x.chapter ?? x.chapter_number);
+    const ayah=Number(x.ayah ?? x.ayah_number ?? x.verse ?? x.verse_number);
+    const text=x.text_uthmani ?? x.uthmani ?? x.text ?? x.verse_text ?? x.arabic ?? x.content;
+    if(surah>0&&ayah>0&&typeof text==='string'){out.push({surah,ayah,text,tokens:normalizeArabic(text)});return;}
+    Object.values(x).forEach(walk);
+  }
+  walk(data); return out.sort((a,b)=>a.surah-b.surah||a.ayah-b.ayah);
+}
+function findQuranMatch(transcript,data) {
+  const words=normalizeArabic(transcript); if(words.length<3||!data)return null;
+  const verses=flattenQuran(data); if(!verses.length)return null;
+  let best={score:0,verse:null,text:''};
+  for(let i=0;i<verses.length;i++){
+    let joined=[],parts=[];
+    for(let j=i;j<Math.min(i+8,verses.length);j++){
+      if(j>i&&(verses[j].surah!==verses[j-1].surah||verses[j].ayah!==verses[j-1].ayah+1))break;
+      joined.push(...verses[j].tokens);parts.push(verses[j].text);
+      if(joined.length<3)continue;
+      const counts=new Map();joined.forEach(w=>counts.set(w,(counts.get(w)||0)+1));
+      const used=new Map();let hit=0;
+      for(const w of words){const have=counts.get(w)||0,u=used.get(w)||0;if(u<have){hit++;used.set(w,u+1);}}
+      const precision=hit/words.length,recall=hit/joined.length,score=2*precision*recall/(precision+recall||1);
+      if(score>best.score)best={score,verse:verses[i],text:parts.join(' ')};
+    }
+  }
+  return best.verse&&best.score>=0.45?{...best.verse,text:best.text,score:best.score}:null;
+}
+document.getElementById('compareBtn').addEventListener('click',()=>{
+  const ref=normalizeArabic(canonicalReference),rec=normalizeArabic(window.__lastTranscript||'');
+  const out=document.getElementById('comparison');
+  if(!ref.length||!rec.length){out.textContent='لم يُعثر على موضع موثوق في المصحف المرجعي. أعد التسجيل بوضوح؛ لن تتم المقارنة مع نص يدوي.';return;}
+  if(ref.length*rec.length>250000){out.textContent='النص طويل للمقارنة في هذه النسخة؛ قسّمه إلى مقاطع أقصر.';return;}
+  const n=ref.length,m=rec.length,dp=Array.from({length:n+1},()=>new Uint16Array(m+1));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=ref[i]===rec[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+  let i=0,j=0,html='',ok=0,missing=0,extra=0;
+  while(i<n||j<m){
+    if(i<n&&j<m&&ref[i]===rec[j]){
+      html+=`<span style="color:#16834a">${escapeHtml(ref[i])}</span> `;i++;j++;ok++;
+    } else if(i<n&&j<m&&dp[i+1][j+1]===dp[i][j]) {
+      // A likely substitution: show the spoken word in red and the expected Quran word.
+      html+=`<span style="color:#c62828" title="الكلمة القرآنية الصحيحة: ${escapeHtml(ref[i])}">${escapeHtml(rec[j])} <small>(الصحيح: ${escapeHtml(ref[i])})</small></span> `;
+      i++;j++;extra++;
+    } else if(i<n&&(j===m||dp[i+1][j]>=dp[i][j+1])){
+      html+=`<span style="color:#b66a00" title="كلمة قرآنية لم تظهر في النص المتعرف عليه">${escapeHtml(ref[i])} <small>(ناقصة)</small></span> `;i++;missing++;
+    } else {
+      html+=`<span style="color:#c62828" title="كلمة زائدة في النص المتعرف عليه">${escapeHtml(rec[j])} <small>(زائدة)</small></span> `;j++;extra++;
+    }
+  }
+  const percent=Math.round(ok/Math.max(n,m,1)*100);
+  out.innerHTML=`<p><b>تطابق الكلمات: ${percent}%</b></p><p>${html}</p><p class="small">متطابقة: ${ok} — كلمات ناقصة: ${missing} — كلمات خاطئة/زائدة: ${extra}. اللون الأحمر يوضح الكلمة المقروءة خطأ، ويعرض الصحيح بجانبها. هذه مقارنة نصية وليست حكمًا على التجويد.</p>`;
+});
+</script>
+</body>
+</html>
