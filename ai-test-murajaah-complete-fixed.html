@@ -210,7 +210,9 @@ $('runBtn').addEventListener('click', async () => {
     lastTranscript = pred.transcript || '';
     window.__lastTranscript = lastTranscript;
     const directOK = Number(pred.surah) > 0 && Number(pred.ayah) > 0 && Number(pred.score) >= 0.35;
-    const autoMatch = findQuranMatch(lastTranscript, quranData);\n    canonicalReference = autoMatch ? autoMatch.text : '';\n    $('reference').value = canonicalReference;
+    const autoMatch = findQuranMatch(lastTranscript, quranData);
+    canonicalReference = autoMatch ? autoMatch.text : '';
+    $('reference').value = canonicalReference;
     const surahShow = directOK ? pred.surah : (autoMatch ? autoMatch.surah : 'لم يُحدّد');
     const ayahShow = directOK ? pred.ayah : (autoMatch ? autoMatch.ayah : 'لم يُحدّد');
     const endShow = directOK && pred.ayah_end && pred.ayah_end !== pred.ayah ? ' – ' + pred.ayah_end : '';
