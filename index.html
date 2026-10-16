@@ -1632,29 +1632,27 @@ function parseKf(j){
   }
   return {text:out,counts,total};
 }
-async function kfFlat(){
-  const c=load('kfFlat',null);
-  if(c&&c.files&&c.t>Date.now()-7*864e5)return c.files;
-  for(const u of ['https://data.jsdelivr.com/v1/packages/gh/thetruetruth/quran-data-kfgqpc@main?structure=flat','https://data.jsdelivr.com/v1/package/gh/thetruetruth/quran-data-kfgqpc@main/flat']){
-    try{
-      const r=await fetch(u);if(!r.ok)continue;
-      const j=await r.json();
-      const files=(j.files||[]).map(f=>typeof f==='string'?f:f.name).filter(Boolean);
-      if(files.length){save('kfFlat',{t:Date.now(),files});return files;}
-    }catch(e){}
-  }
-  return null;
+const KF_REPOS=[{o:'thetruetruth',r:'quran-data-kfgqpc'},{o:'ibnhazm',r:'KFGQPC'}];
+async function kfTree(rep){
+  const key='kfTree_'+rep.o,c=load(key,null);
+  if(c&&c.files&&c.files.length&&c.t>Date.now()-7*864e5)return {files:c.files};
+  try{
+    const r=await fetch('https://api.github.com/repos/'+rep.o+'/'+rep.r+'/git/trees/main?recursive=1');
+    if(!r.ok)return {err:rep.o+': قائمة الملفات http '+r.status};
+    const j=await r.json();
+    const files=(j.tree||[]).filter(t=>t.type==='blob').map(t=>({p:t.path,s:t.size||0}));
+    if(!files.length)return {err:rep.o+': قائمة الملفات فارغة'};
+    save(key,{t:Date.now(),files});
+    return {files};
+  }catch(e){return {err:rep.o+': قائمة الملفات '+String(e&&e.message||e)};}
 }
-function jsonCandidates(files,r){
-  const out=[];
-  if(files){
-    const f=files.filter(n=>n.toLowerCase().startsWith('/'+r.folder+'/')&&n.toLowerCase().endsWith('.json'));
-    f.sort((x,y)=>(/data/i.test(y)?1:0)-(/data/i.test(x)?1:0));
-    f.forEach(n=>out.push(n.replace(/^\//,'')));
-  }
-  [r.folder+'/data/'+r.folder+'Data_v'+r.ver+'.json',r.folder+'/json/'+r.folder+'Data_v'+r.ver+'.json'].forEach(x=>{if(!out.includes(x))out.push(x);});
-  return out;
+function pickJsonFiles(files,folder){
+  const pre=folder+'/';
+  return files.filter(x=>x.p.toLowerCase().startsWith(pre)&&x.p.toLowerCase().endsWith('.json'))
+    .sort((x,y)=>((/data/i.test(y.p)?1:0)-(/data/i.test(x.p)?1:0))||(y.s-x.s)).slice(0,4).map(x=>x.p);
 }
+const guessPaths=r=>[r.folder+'/data/'+r.folder+'Data_v'+r.ver+'.json',r.folder+'/json/'+r.folder+'Data_v'+r.ver+'.json'];
+const encPath=pth=>pth.split('/').map(encodeURIComponent).join('/');
 async function ensureRiwaya(id){
   if(id==='hafs'||RWDATA[id])return true;
   try{
@@ -1666,21 +1664,35 @@ async function ensureRiwaya(id){
 async function fetchRiwaya(id,btn){
   const r=rwById(id);if(!r||!r.folder)return false;
   if(btn){btn.disabled=true;btn.textContent='جارٍ التحميل...';}
-  const errs=[];
+  const errs=[],tries=[],seen=new Set();
+  const addTry=(rep,pth)=>{
+    const k=rep.o+'/'+pth;if(seen.has(k))return;seen.add(k);
+    const enc=encPath(pth);
+    tries.push({label:k,urls:['https://raw.githubusercontent.com/'+rep.o+'/'+rep.r+'/main/'+enc,'https://cdn.jsdelivr.net/gh/'+rep.o+'/'+rep.r+'@main/'+enc]});
+  };
   try{
-    const files=await kfFlat();
-    if(!files)errs.push('تعذّر جلب قائمة ملفات المستودع');
-    for(const base of KF_BASE){
-      for(const path of jsonCandidates(files,r)){
+    for(const rep of KF_REPOS){
+      const t=await kfTree(rep);
+      if(t.err){errs.push(t.err);continue;}
+      const js=pickJsonFiles(t.files,r.folder);
+      js.forEach(pth=>addTry(rep,pth));
+      if(!js.length){
+        const inFolder=t.files.filter(x=>x.p.toLowerCase().startsWith(r.folder+'/')).map(x=>x.p.split('/').slice(1).join('/'));
+        errs.push(rep.o+': لا ملف json في '+r.folder+(inFolder.length?' (الموجود: '+inFolder.slice(0,6).join('، ')+')':' (المجلد غير موجود)'));
+      }
+    }
+    if(!tries.length){KF_REPOS.forEach(rep=>guessPaths(r).forEach(pth=>addTry(rep,pth)));}
+    for(const tr of tries){
+      for(const u of tr.urls){
         try{
-          const resp=await fetch(base+path);
-          if(!resp.ok){errs.push(hostOf(base)+'/'+path+' http '+resp.status);continue;}
+          const resp=await fetch(u);
+          if(!resp.ok){errs.push(hostOf(u)+' '+tr.label+' http '+resp.status);continue;}
           const parsed=parseKf(await resp.json());
-          if(parsed.err){errs.push(path+': '+parsed.err);continue;}
+          if(parsed.err){errs.push(tr.label+': '+parsed.err);break;}
           RWDATA[id]={text:parsed.text,counts:parsed.counts};
           try{const c=await caches.open('qtext');await c.put('riw-'+id,new Response(JSON.stringify(RWDATA[id])));}catch(e){}
           return true;
-        }catch(e){errs.push(path+': '+String(e&&e.message||e));}
+        }catch(e){errs.push(hostOf(u)+' '+tr.label+': '+String(e&&e.message||e));}
       }
     }
   }finally{
