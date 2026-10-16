@@ -166,6 +166,9 @@
 <main id="v2" hidden>
   <div class="card">
     <h2>القراءة والاختبار</h2>
+    <label for="rw">الرواية</label>
+    <select id="rw"></select>
+    <p class="hint" id="rwMsg"></p>
     <label for="tSurah">السورة</label>
     <select id="tSurah"></select>
     <div class="row">
@@ -411,6 +414,7 @@ const keyOf=(s,a)=>s+':'+a;
 let TEXT=null;
 const BSM='بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ';
 const norm=t=>t.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g,'').replace(/\u0671/g,'\u0627');
+const hasHole=arr=>{for(let i=0;i<arr.length;i++)if(!arr[i])return true;return false;};
 const ar=n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
 function buildText(j){
   const out=COUNTS.map(()=>[]);
@@ -419,7 +423,7 @@ function buildText(j){
   else if(j&&j.ayahs){j.ayahs.forEach(ay=>{const p=String(ay.verse_key).split(':').map(Number);put(p[0],p[1],ay.text);});}
   else if(j&&j.verses){j.verses.forEach(v=>{const p=String(v.verse_key).split(':').map(Number);put(p[0],p[1],v.text_uthmani||v.text);});}
   else return null;
-  for(let i=0;i<114;i++){if(out[i].length!==COUNTS[i]||out[i].some(x=>!x))return null;}
+  for(let i=0;i<114;i++){if(out[i].length!==COUNTS[i]||hasHole(out[i]))return null;}
   for(let sn=2;sn<=114;sn++){
     if(sn===9)continue;
     const w=out[sn-1][0].split(' ');
@@ -462,12 +466,25 @@ function updateTextMsgs(){
   });
 }
 document.addEventListener('click',e=>{const b=e.target.closest('.loadText');if(b)fetchText(b);});
-function renderRange(box,sn,from,to){
-  if(!TEXT){box.innerHTML='';return;}
+const hafsView=()=>({id:'hafs',text:TEXT,counts:COUNTS,font:null});
+let rwId='hafs';const RWDATA={};
+function view(){
+  if(rwId==='hafs')return hafsView();
+  const d=RWDATA[rwId],r=RIWAYAT.find(x=>x.id===rwId);
+  return d?{id:rwId,text:d.text,counts:d.counts,font:r&&r.folder?r.folder+r.ver:null}:{id:rwId,text:null,counts:COUNTS,font:null};
+}
+function bsmHeaderOn(sn,from,v){
+  if(from!==1||sn===9)return false;
+  if(sn===1)return !norm(v.text[0][0]).startsWith('بسم');
+  return true;
+}
+function renderRange(box,sn,from,to,tv){
+  const v=tv||hafsView();
+  if(!v.text){box.innerHTML='';return;}
   const parts=[];
-  if(from===1&&sn!==1&&sn!==9)parts.push('<div class="bsm">'+BSM+'</div>');
+  if(bsmHeaderOn(sn,from,v))parts.push('<div class="bsm">'+BSM+'</div>');
   for(let a=from;a<=to;a++){
-    parts.push(`<span class="ay" data-a="${a}"><span class="t">${TEXT[sn-1][a-1]}</span> <span class="mk">﴿${ar(a)}﴾</span> </span>`);
+    parts.push(`<span class="ay" data-a="${a}"><span class="t">${v.text[sn-1][a-1]}</span> <span class="mk">﴿${ar(a)}﴾</span> </span>`);
   }
   box.innerHTML=parts.join('');
 }
@@ -849,16 +866,17 @@ $('tab5').onclick=()=>showTab(5);
 NAMES.forEach((n,i)=>{const o=document.createElement('option');o.value=i+1;o.textContent=(i+1)+' - '+n;$('tSurah').appendChild(o);});
 $('tSurah').value=1;
 function tRange(){
-  const sn=+$('tSurah').value,max=COUNTS[sn-1];
+  const sn=+$('tSurah').value,max=view().counts[sn-1];
   let f=Math.max(1,+$('tFrom').value||1),t=Math.min(max,+$('tTo').value||max);
   if(f>t)[f,t]=[t,f];
   $('tFrom').value=f;$('tTo').value=t;return {s:sn,f,t};
 }
-function renderRead(){const r=tRange();renderRange($('readBox'),r.s,r.f,r.t);}
-$('tSurah').onchange=()=>{const sn=+$('tSurah').value;$('tFrom').value=1;$('tTo').value=COUNTS[sn-1];q=null;renderRead();clearQ();};
+function renderRead(){const r=tRange();renderRange($('readBox'),r.s,r.f,r.t,view());}
+$('tSurah').onchange=()=>{const sn=+$('tSurah').value;$('tFrom').value=1;$('tTo').value=view().counts[sn-1];q=null;renderRead();clearQ();};
 $('tFrom').onchange=$('tTo').onchange=()=>{q=null;renderRead();clearQ();};
 $('readBox').onclick=async e=>{
   const el=e.target.closest('.ay');if(!el)return;
+  if(rwId!=='hafs'){statusEl.textContent='الصوت متاح لرواية حفص فقط حالياً';return;}
   const {s:sn}=tRange(),a=+el.dataset.a;
   stop();const my=token;
   $('readBox').querySelectorAll('.cur').forEach(x=>x.classList.remove('cur'));el.classList.add('cur');
@@ -868,7 +886,7 @@ $('readBox').onclick=async e=>{
 };
 $('mRead').onclick=()=>{$('readCard').hidden=false;$('testCard').hidden=true;renderRead();};
 $('mTest').onclick=()=>{
-  if(!TEXT){alert('حمّل نص القرآن أولاً (زر «تحميل النص»).');return;}
+  if(!view().text){alert('حمّل نص هذه الرواية أولاً (زر «تحميل النص»).');return;}
   $('readCard').hidden=true;$('testCard').hidden=false;if(!q)newQuestion();
 };
 
@@ -882,9 +900,9 @@ function renderQ(){
   $('qScore').textContent=`${NAMES[q.s-1]} · آية ${q.a} — تذكرت: ${score.ok} · لم أتذكر: ${score.bad}`;
 }
 function newQuestion(){
-  if(!TEXT){alert('حمّل نص القرآن أولاً.');return;}
+  if(!view().text){alert('حمّل نص هذه الرواية أولاً.');return;}
   let r=tRange(),a;
-  if($('qSrc').value==='manual'){a=r.f+Math.floor(Math.random()*(r.t-r.f+1));}
+  if($('qSrc').value==='manual'||rwId!=='hafs'){a=r.f+Math.floor(Math.random()*(r.t-r.f+1));}
   else{
     const pool=poolFor($('qSrc').value);
     if(!pool.length){alert('لا توجد مقاطع لهذا الخيار اليوم. تأكد من وجود خطة محفوظة ومهام لليوم.');return;}
@@ -893,7 +911,7 @@ function newQuestion(){
   }
   let type=$('qType').value;
   if(type==='random')type=['first','hideStart','hideMid','hideEnd'][Math.floor(Math.random()*4)];
-  const words=TEXT[r.s-1][a-1].split(' ').filter(Boolean),n=words.length;
+  const words=view().text[r.s-1][a-1].split(/\s+/).filter(w=>/[\u0621-\u064A\u0671-\u06D3]/.test(w)),n=words.length;
   const shown=new Array(n).fill(false);
   if(type==='first'){if(n>1)shown[0]=true;}
   else if(type==='hideStart'){const k=Math.ceil(n/2);for(let i=k;i<n;i++)shown[i]=true;}
@@ -921,14 +939,17 @@ function pickFromPool(pool,rnd){
 }
 function quizFromToday(){
   if(!TEXT){alert('حمّل نص القرآن أولاً (من تبويب قراءة واختبار).');return;}
+  rwId='hafs';$('rw').value='hafs';updateRwMsg();
   $('qSrc').value='today';showTab(2);q=null;$('mTest').onclick();
 }
 function answerQ(ok){
   if(!q||q.answered)return;
   q.answered=true;
   if(ok)score.ok++;else score.bad++;
-  const k=keyOf(q.s,q.a),st=stats[k]||{ok:0,bad:0};
-  if(ok)st.ok++;else st.bad++;st.t=Date.now();stats[k]=st;save('stats',stats);
+  if(rwId==='hafs'){
+    const k=keyOf(q.s,q.a),st=stats[k]||{ok:0,bad:0};
+    if(ok)st.ok++;else st.bad++;st.t=Date.now();stats[k]=st;save('stats',stats);
+  }
   q.shown.fill(true);renderQ();
 }
 $('qNew').onclick=newQuestion;
@@ -937,7 +958,8 @@ $('qShow').onclick=()=>{if(!q)return;q.shown.fill(true);renderQ();};
 $('qOk').onclick=()=>answerQ(true);
 $('qBad').onclick=()=>answerQ(false);
 $('qHear').onclick=async()=>{
-  if(!q)return;stop();const my=token;
+  if(!q)return;
+  if(rwId!=='hafs'){statusEl.textContent='الصوت متاح لرواية حفص فقط حالياً';return;}stop();const my=token;
   statusEl.textContent=`${NAMES[q.s-1]} · آية ${q.a}`;
   const ok=await playAyah(q.s,q.a);
   if(my===token)statusEl.textContent=ok?'انتهى':'تعذّر تشغيل الصوت.';
@@ -1564,6 +1586,155 @@ $('bkFile').onchange=async()=>{
     location.reload();
   }catch(e){alert('تعذّرت الاستعادة: '+(e&&e.message||e));}
 };
+
+// ---- الروايات (نصوص مجمع الملك فهد عبر نسخة على jsDelivr) ----
+const KF_BASE=['https://cdn.jsdelivr.net/gh/thetruetruth/quran-data-kfgqpc@main/','https://raw.githubusercontent.com/ibnhazm/KFGQPC/main/'];
+const RIWAYAT=[
+  {id:'hafs',name:'حفص عن عاصم (النص الافتراضي)'},
+  {id:'hafsk',folder:'hafs',ver:18,name:'حفص عن عاصم (نسخة المجمع)'},
+  {id:'warsh',folder:'warsh',ver:10,name:'ورش عن نافع'},
+  {id:'qaloon',folder:'qaloon',ver:10,name:'قالون عن نافع'},
+  {id:'shouba',folder:'shouba',ver:8,name:'شعبة عن عاصم'},
+  {id:'doori',folder:'doori',ver:9,name:'الدوري عن أبي عمرو'},
+  {id:'soosi',folder:'soosi',ver:9,name:'السوسي عن أبي عمرو'},
+  {id:'bazzi',folder:'bazzi',ver:7,name:'البزي عن ابن كثير'},
+  {id:'qumbul',folder:'qumbul',ver:7,name:'قنبل عن ابن كثير'}
+];
+const rwById=id=>RIWAYAT.find(r=>r.id===id);
+function cleanAyah(t){
+  t=String(t).replace(/[\u00A0\u200E\u200F]/g,' ');
+  let g=0;
+  while(t.length&&g++<30){
+    const c=t.charCodeAt(t.length-1);
+    if(c===32||(c>=0xFC00&&c<=0xFDFF)||c===0x06DD||(c>=0x660&&c<=0x669)||(c>=0x6F0&&c<=0x6F9)||(c>=48&&c<=57))t=t.slice(0,-1);else break;
+  }
+  return t.trim().replace(/\s+/g,' ');
+}
+function parseKf(j){
+  const rows=Array.isArray(j)?j:(j&&(j.data||j.quran||j.rows||j.verses||j.ayahs));
+  if(!Array.isArray(rows)||!rows.length)return {err:'صيغة غير متوقعة (ليست قائمة)'};
+  const keys=Object.keys(rows[0]),find=re=>keys.find(k=>re.test(k));
+  const kS=find(/^(sura_no|surah_no|sura|surah|sora|soura|sura_number|chapter)$/i);
+  const kA=find(/^(aya_no|ayah_no|aya|ayah|verse|verse_no|aya_number|ayah_number|verse_number)$/i);
+  let kT=find(/^(aya_text|ayah_text|verse_text|text)$/i);
+  if(!kT)kT=keys.find(k=>/text/i.test(k)&&!/emlaey|simple|clean/i.test(k));
+  if(!kS||!kA||!kT)return {err:'لم أجد الحقول المطلوبة. الحقول: '+keys.join(',')};
+  const out=COUNTS.map(()=>[]);
+  rows.forEach(r=>{const sn=+r[kS],a=+r[kA];if(sn>=1&&sn<=114&&a>=1)out[sn-1][a-1]=cleanAyah(r[kT]);});
+  const counts=out.map(x=>x.length);
+  for(let i=0;i<114;i++){if(!counts[i]||hasHole(out[i]))return {err:'ترقيم الآيات غير متصل في السورة '+(i+1)};}
+  const total=counts.reduce((x,y)=>x+y,0);
+  if(total<6000||total>6300)return {err:'عدد الآيات غير معقول: '+total};
+  for(let sn=2;sn<=114;sn++){
+    if(sn===9)continue;
+    const w=out[sn-1][0].split(' ');
+    if(w.length>4&&norm(w[0])==='بسم'&&norm(w[1])==='الله')out[sn-1][0]=w.slice(4).join(' ');
+  }
+  return {text:out,counts,total};
+}
+async function kfFlat(){
+  const c=load('kfFlat',null);
+  if(c&&c.files&&c.t>Date.now()-7*864e5)return c.files;
+  for(const u of ['https://data.jsdelivr.com/v1/packages/gh/thetruetruth/quran-data-kfgqpc@main?structure=flat','https://data.jsdelivr.com/v1/package/gh/thetruetruth/quran-data-kfgqpc@main/flat']){
+    try{
+      const r=await fetch(u);if(!r.ok)continue;
+      const j=await r.json();
+      const files=(j.files||[]).map(f=>typeof f==='string'?f:f.name).filter(Boolean);
+      if(files.length){save('kfFlat',{t:Date.now(),files});return files;}
+    }catch(e){}
+  }
+  return null;
+}
+function jsonCandidates(files,r){
+  const out=[];
+  if(files){
+    const f=files.filter(n=>n.toLowerCase().startsWith('/'+r.folder+'/')&&n.toLowerCase().endsWith('.json'));
+    f.sort((x,y)=>(/data/i.test(y)?1:0)-(/data/i.test(x)?1:0));
+    f.forEach(n=>out.push(n.replace(/^\//,'')));
+  }
+  [r.folder+'/data/'+r.folder+'Data_v'+r.ver+'.json',r.folder+'/json/'+r.folder+'Data_v'+r.ver+'.json'].forEach(x=>{if(!out.includes(x))out.push(x);});
+  return out;
+}
+async function ensureRiwaya(id){
+  if(id==='hafs'||RWDATA[id])return true;
+  try{
+    const c=await caches.open('qtext'),r=await c.match('riw-'+id);
+    if(r){const d=await r.json();if(d&&d.text&&d.counts){RWDATA[id]=d;return true;}}
+  }catch(e){}
+  return false;
+}
+async function fetchRiwaya(id,btn){
+  const r=rwById(id);if(!r||!r.folder)return false;
+  if(btn){btn.disabled=true;btn.textContent='جارٍ التحميل...';}
+  const errs=[];
+  try{
+    const files=await kfFlat();
+    if(!files)errs.push('تعذّر جلب قائمة ملفات المستودع');
+    for(const base of KF_BASE){
+      for(const path of jsonCandidates(files,r)){
+        try{
+          const resp=await fetch(base+path);
+          if(!resp.ok){errs.push(hostOf(base)+'/'+path+' http '+resp.status);continue;}
+          const parsed=parseKf(await resp.json());
+          if(parsed.err){errs.push(path+': '+parsed.err);continue;}
+          RWDATA[id]={text:parsed.text,counts:parsed.counts};
+          try{const c=await caches.open('qtext');await c.put('riw-'+id,new Response(JSON.stringify(RWDATA[id])));}catch(e){}
+          return true;
+        }catch(e){errs.push(path+': '+String(e&&e.message||e));}
+      }
+    }
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='تحميل النص (مرة واحدة)';}
+  }
+  alert('تعذّر تحميل نص '+r.name+'.\nالسبب التقني: '+errs.slice(0,6).join(' | '));
+  return false;
+}
+async function loadRwFont(r){
+  const fam=r.folder+r.ver;
+  try{
+    if(document.fonts&&[...document.fonts].some(f=>f.family===fam&&f.status==='loaded'))return fam;
+    const key='font-'+fam,c=await caches.open('qtext');
+    let resp=await c.match(key);
+    if(!resp){
+      for(const base of KF_BASE){
+        try{const rr=await fetch(base+r.folder+'/font/'+r.folder+'.'+r.ver+'.woff2');if(rr.ok){await c.put(key,rr.clone());resp=rr;break;}}catch(e){}
+      }
+      if(!resp)return null;
+    }
+    const ff=new FontFace(fam,await resp.arrayBuffer());
+    await ff.load();document.fonts.add(ff);return fam;
+  }catch(e){return null;}
+}
+function updateRwMsg(){
+  const el=$('rwMsg');
+  if(rwId==='hafs'){el.innerHTML='';return;}
+  const r=rwById(rwId);
+  if(!RWDATA[rwId]){el.innerHTML='نص '+r.name+' غير محمّل. <button class="alt loadRw" style="flex:none;padding:8px 12px">تحميل النص (مرة واحدة)</button>';return;}
+  el.textContent='النص والترقيم هنا من نسخة مجمع الملك فهد لهذه الرواية، وترقيم الآيات يختلف عن حفص. الصوت غير متاح بعد لهذه الرواية. قابل النص بمصحف مطبوع بالرواية نفسها قبل الاعتماد عليه في الحفظ.';
+}
+async function applyRiwaya(){
+  let fam=null;
+  if(rwId!=='hafs'&&view().text)fam=await loadRwFont(rwById(rwId));
+  const css=fam?"'"+fam+"','Amiri Quran',serif":'';
+  $('readBox').style.fontFamily=css;$('qBox').style.fontFamily=css;
+  updateRwMsg();
+}
+RIWAYAT.forEach(r=>{const o=document.createElement('option');o.value=r.id;o.textContent=r.name;$('rw').appendChild(o);});
+$('rw').onchange=async()=>{
+  rwId=$('rw').value;q=null;clearQ();
+  await ensureRiwaya(rwId);
+  const v=view(),sn=Math.min(Math.max(1,+$('tSurah').value||1),114);
+  $('tFrom').value=1;$('tTo').value=v.counts[sn-1];
+  await applyRiwaya();renderRead();
+};
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('.loadRw');if(!b)return;
+  if(await fetchRiwaya(rwId,b)){
+    const v=view();$('tFrom').value=1;$('tTo').value=v.counts[Math.max(0,(+$('tSurah').value||1)-1)];
+    await applyRiwaya();renderRead();
+  }
+});
+// ---- نهاية الروايات ----
 
 applyTheme();
 updateNote();
