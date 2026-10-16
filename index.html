@@ -37,9 +37,9 @@
   #stop{background:#e11d48;color:#fff;padding:8px 16px}
   #note{font-size:12px;color:#5b7a77;margin:12px;text-align:center}
   .tabs{display:flex;background:#0d625b}
-  .tabs button{flex:1;background:none;color:#cfeeea;border-radius:0;padding:12px 4px;font-size:14px}
+  .tabs button{flex:1;background:none;color:#cfeeea;border-radius:0;padding:12px 2px;font-size:13px}
   .tabs button.on{background:#f0f7f6;color:#0f766e;font-weight:700}
-  .quranText{font-family:'Amiri Quran','Amiri','Scheherazade New',serif;font-size:26px;line-height:2.3;text-align:right;position:relative;max-height:45vh;overflow:auto;padding:6px}
+  .quranText{font-family:'Amiri Quran','Amiri','Scheherazade New',serif;font-size:var(--qfs,26px);line-height:2.3;text-align:right;position:relative;max-height:45vh;overflow:auto;padding:6px}
   .ay{border-radius:8px;padding:2px 3px}
   .ay.cur{background:#ffe9a8}
   .mk{color:#0f766e;font-size:20px}
@@ -50,7 +50,33 @@
   .blank{display:inline-block;border-bottom:2px dotted #0f766e;height:1em;vertical-align:baseline;margin:0 3px}
   .ok{background:#d9f3e4;color:#14633a}
   .bad{background:#fde8ec;color:#e11d48}
-  main[hidden],.card[hidden]{display:none}
+  [hidden]{display:none!important}
+  .bar{height:10px;background:#dfeeec;border-radius:6px;overflow:hidden;margin:6px 0 10px}
+  .bar i{display:block;height:100%;background:#0f766e}
+  .chart{display:flex;align-items:flex-end;gap:4px;height:80px;margin:8px 0}
+  .chart div{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:1px;height:100%}
+  .chart b{display:block;width:45%;border-radius:3px 3px 0 0;min-height:0}
+  .chart .n{background:#0f766e}.chart .r{background:#e0a33a}
+  .legend{font-size:12px;color:#5b7a77}
+  body.dark{background:#0e1a19;color:#d8ebe8}
+  body.dark .card,body.dark .item{background:#16282a;box-shadow:none}
+  body.dark .task{background:#1b3033}
+  body.dark select,body.dark input{background:#0e1a19;color:#d8ebe8;border-color:#35575a}
+  body.dark .alt,body.dark .item .dl{background:#22393c;color:#7fd4c9}
+  body.dark .alt.on,body.dark .item .dl.done,body.dark .hzrow .on{background:#0f766e;color:#fff}
+  body.dark .ok{background:#17402c;color:#8fe0b0}
+  body.dark .bad,body.dark .item .rdel{background:#44202a;color:#ff9aaa}
+  body.dark .hint,body.dark #note,body.dark .hzt small,body.dark .legend{color:#8fb0ad}
+  body.dark .card h2,body.dark .mk,body.dark .bsm,body.dark .item .num,body.dark details summary{color:#6fd6c8}
+  body.dark .ay.cur{background:#4a4020}
+  body.dark .tabs{background:#0b2523}
+  body.dark .tabs button.on{background:#0e1a19;color:#6fd6c8}
+  body.dark .tip{background:#3a3318;color:#f3e6b0}
+  body.dark .srow,body.dark .hzrow{border-color:#2a4447}
+  body.dark .rv{border-color:#35575a}
+  body.dark #bar{background:#06100f}
+  body.dark .blank{border-color:#6fd6c8}
+  body.dark .bar{background:#22393c}
   .task{background:#f3faf9;border-radius:12px;padding:10px;margin-bottom:10px}
   .rv{margin-top:8px;padding-top:8px;border-top:1px dashed #cfe3e0}
   .late{color:#e11d48;margin-right:6px}
@@ -66,7 +92,7 @@
 </head>
 <body>
 <header>حفظ القرآن</header>
-<div class="tabs"><button id="tab1" class="on">التكرار</button><button id="tab2">القراءة والاختبار</button><button id="tab3">الخطة</button><button id="tab4">القرّاء</button></div>
+<div class="tabs"><button id="tab1" class="on">التكرار</button><button id="tab2">قراءة واختبار</button><button id="tab3">الخطة</button><button id="tab4">القرّاء</button><button id="tab5">المزيد</button></div>
 <main id="v1">
 
 <div class="card">
@@ -86,6 +112,9 @@
     <div><label for="sleep">مؤقت الإيقاف</label>
       <select id="sleep"><option value="0">بدون</option><option value="10">10 د</option><option value="20">20 د</option><option value="30">30 د</option><option value="60">60 د</option></select></div>
   </div>
+  <label for="rmode">نمط التكرار</label>
+  <select id="rmode"><option value="norm">عادي (كل الآيات ثم تعاد)</option><option value="cum">تراكمي للربط (1، ثم 1-2، ثم 1-2-3...)</option></select>
+  <p class="hint">في النمط التراكمي يُطبَّق «عدد المرات» على كل مرحلة.</p>
   <div class="row">
     <div><label for="bsmAudio">البسملة قبل السورة</label>
       <select id="bsmAudio"><option value="1">تشغيل</option><option value="0">إيقاف</option></select></div>
@@ -156,6 +185,8 @@
   </div>
 
   <div class="card" id="testCard" hidden>
+    <label for="qSrc">مصدر الأسئلة</label>
+    <select id="qSrc"><option value="manual">النطاق المحدد أعلاه</option><option value="today">مقاطع اليوم كلها (الخطة)</option><option value="new">الحفظ الجديد اليوم</option><option value="rev">مراجعة اليوم</option></select>
     <label for="qType">نوع الاختبار</label>
     <select id="qType">
       <option value="first">تلميح أول كلمة فقط</option>
@@ -265,6 +296,28 @@
   </div>
 </main>
 
+<main id="v5" hidden>
+  <div class="card"><h2>إحصاءاتي</h2><div id="statsBox"></div></div>
+  <div class="card">
+    <h2>المظهر</h2>
+    <label for="theme">وضع الألوان</label>
+    <select id="theme"><option value="auto">تلقائي (حسب الهاتف)</option><option value="light">فاتح</option><option value="dark">ليلي</option></select>
+    <label for="fs">حجم خط القرآن: <span id="fsVal"></span></label>
+    <input id="fs" type="range" min="20" max="44" step="2" value="26">
+    <div class="quranText" style="max-height:none;margin-top:6px">﴿ بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ ﴾</div>
+  </div>
+  <div class="card">
+    <h2>النسخ الاحتياطي</h2>
+    <p class="hint">يحفظ خطتك ومحفوظاتك ودرجات الاختبار وإعداداتك في ملف تحتفظ به. استعد منه إن غيّرت هاتفك أو مُسحت بيانات المتصفح. صوت القرّاء المحمّل لا يدخل فيه.</p>
+    <label><input type="checkbox" id="bkRec" style="width:auto"> تضمين تسجيلاتي الصوتية (يكبر الملف)</label>
+    <button class="primary" id="bkMake">تجهيز نسخة احتياطية</button>
+    <div class="row" id="bkOut" hidden style="margin-top:8px"><button class="alt" id="bkShare">📤 مشاركة</button><button class="alt" id="bkSave">💾 حفظ الملف</button></div>
+    <p class="hint" id="bkMsg"></p>
+    <button class="alt" id="bkImport" style="width:100%;margin-top:10px">⬆ استعادة من ملف</button>
+    <input type="file" id="bkFile" accept=".json,application/json" hidden>
+  </div>
+</main>
+
 <div id="bar"><div id="status">اضغط على سورة للاستماع</div><button id="stop">إيقاف</button></div>
 <audio id="player" preload="auto"></audio>
 
@@ -319,7 +372,7 @@ let token=0,pendingResolve=null,waitTimer=null,sleepT=null,recBlob=null,rec=null
 const load=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v;}catch(e){return d;}};
 const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
 let memorized=new Set(load('mem',[]));
-let cfg=Object.assign({gap:'0',speed:'1',txt:'show',bsm:'1',rec:'ar.alafasy'},load('cfg',{}));
+let cfg=Object.assign({gap:'0',speed:'1',txt:'show',bsm:'1',rec:'ar.alafasy',rmode:'norm',theme:'auto',fs:26},load('cfg',{}));
 curRec=recById(cfg.rec);SOURCES=sourcesFor(curRec);
 const dlKey=id=>id==='ar.alafasy'?'dl':'dl_'+id;
 let downloaded=new Set(load(dlKey(curRec.id),[]));
@@ -461,6 +514,7 @@ applySpeed();
 $('speed').onchange=()=>{cfg.speed=$('speed').value;save('cfg',cfg);applySpeed();};
 $('gap').onchange=()=>{cfg.gap=$('gap').value;save('cfg',cfg);};
 $('bsmAudio').onchange=()=>{cfg.bsm=$('bsmAudio').value;save('cfg',cfg);};
+$('rmode').value=cfg.rmode;$('rmode').onchange=()=>{cfg.rmode=$('rmode').value;save('cfg',cfg);};
 $('sleep').onchange=()=>{
   clearTimeout(sleepT);const m=+$('sleep').value;
   if(m>0)sleepT=setTimeout(()=>{stop();statusEl.textContent='انتهى مؤقت الإيقاف';},m*60000);
@@ -501,6 +555,37 @@ const wait=ms=>new Promise(res=>{
   pendingResolve=res;
   waitTimer=setTimeout(()=>{pendingResolve=null;res(true);},ms);
 });
+async function gapAfter(my,sn,a){
+  const g=$('gap').value;
+  if(g==='0')return my===token;
+  const d=isFinite(player.duration)?player.duration*1000:3000;
+  const ms=g==='1'?d:g==='2'?d*2:3000;
+  statusEl.textContent=NAMES[sn-1]+' · آية '+a+' · رددها الآن...';
+  await wait(ms);
+  return my===token;
+}
+async function bsmFirst(sn,from,my){
+  if(from===1&&sn!==1&&sn!==9&&$('bsmAudio').value==='1'){
+    statusEl.textContent=NAMES[sn-1]+' · البسملة';
+    await playAyah(1,1);
+  }
+  return my===token;
+}
+// يشغّل الآيات a1..a2 مرة واحدة؛ يرجع false عند الإيقاف أو الفشل
+async function playPass(sn,a1,a2,my,label,lastInfo){
+  for(let a=a1;a<=a2;a++){
+    if(my!==token)return false;
+    if(lastInfo){last={s:sn,a,to:lastInfo.to,reps:lastInfo.reps};save('last',last);}
+    highlight(a);
+    statusEl.textContent=NAMES[sn-1]+' · آية '+a+(label?' · '+label:'');
+    const ok=await playAyah(sn,a);
+    if(my!==token)return false;
+    if(!ok){statusEl.textContent='تعذّر تشغيل الصوت. تحقق من الإنترنت أو حمّل السورة.';return false;}
+    if(!(await gapAfter(my,sn,a)))return false;
+  }
+  return true;
+}
+function cumStages(from,to){const out=[];for(let k=from;k<=to;k++)out.push([from,k]);return out;}
 async function run(s,from,to,reps){
   stop();const my=token;
   try{
@@ -511,26 +596,18 @@ async function run(s,from,to,reps){
     }
   }catch(e){}
   renderMainText(s,from,to);
-  if(from===1&&s!==1&&s!==9&&$('bsmAudio').value==='1'){
-    statusEl.textContent=`${NAMES[s-1]} · البسملة`;
-    await playAyah(1,1);
-    if(my!==token)return;
-  }
-  for(let r=1;r<=reps;r++){
-    for(let a=from;a<=to;a++){
-      if(my!==token)return;
-      last={s,a,to,reps};save('last',last);highlight(a);
-      statusEl.textContent=`${NAMES[s-1]} · آية ${a} · المرة ${r} من ${reps}`;
-      const ok=await playAyah(s,a);
-      if(my!==token)return;
-      if(!ok){statusEl.textContent='تعذّر تشغيل الصوت. تحقق من الإنترنت أو حمّل السورة.';return;}
-      const g=$('gap').value;
-      if(g!=='0'){
-        const d=isFinite(player.duration)?player.duration*1000:3000;
-        const ms=g==='1'?d:g==='2'?d*2:3000;
-        statusEl.textContent=`${NAMES[s-1]} · آية ${a} · رددها الآن...`;
-        await wait(ms);
-        if(my!==token)return;
+  if(!(await bsmFirst(s,from,my)))return;
+  const cum=$('rmode').value==='cum'&&to>from;
+  if(!cum){
+    for(let r=1;r<=reps;r++){
+      if(!(await playPass(s,from,to,my,'المرة '+r+' من '+reps,{to,reps})))return;
+    }
+  }else{
+    const stages=cumStages(from,to);
+    for(let i=0;i<stages.length;i++){
+      for(let r=1;r<=reps;r++){
+        last={s,a:from,to,reps};save('last',last);
+        if(!(await playPass(s,stages[i][0],stages[i][1],my,'المرحلة '+(i+1)+' من '+stages.length+' · المرة '+r+' من '+reps,null)))return;
       }
     }
   }
@@ -539,6 +616,17 @@ async function run(s,from,to,reps){
     statusEl.textContent='انتهى التشغيل';
   }
 }
+// مراجعة صوتية متتابعة لعدة مقاطع
+async function runQueue(items,title){
+  stop();const my=token;
+  for(let i=0;i<items.length;i++){
+    const it=items[i];
+    if(!(await bsmFirst(it.s,it.a1,my)))return;
+    if(!(await playPass(it.s,it.a1,it.a2,my,title+' '+(i+1)+' من '+items.length,null)))return;
+  }
+  if(my===token)statusEl.textContent='انتهت المراجعة الصوتية. علّم ما أنجزته في مهام اليوم.';
+}
+
 function playAyah(s,a){
   return new Promise(async res=>{
     pendingResolve=res;
@@ -743,10 +831,11 @@ async function downloadSurah(s,btn){
 // ---- التبويبات ----
 let tInit=false;
 function showTab(n){
-  $('v1').hidden=n!==1;$('v2').hidden=n!==2;$('v3').hidden=n!==3;$('v4').hidden=n!==4;
-  ['tab1','tab2','tab3','tab4'].forEach((id,i)=>$(id).classList.toggle('on',i+1===n));
+  $('v1').hidden=n!==1;$('v2').hidden=n!==2;$('v3').hidden=n!==3;$('v4').hidden=n!==4;$('v5').hidden=n!==5;
+  ['tab1','tab2','tab3','tab4','tab5'].forEach((id,i)=>$(id).classList.toggle('on',i+1===n));
   if(n===3){fillForm();renderPlan();}
   if(n===4)renderReciters();
+  if(n===5)renderStats();
   if(n===2&&!tInit){tInit=true;$('tSurah').value=$('surah').value;$('tFrom').value=$('from').value;$('tTo').value=$('to').value;renderRead();}
   window.scrollTo(0,0);
 }
@@ -754,6 +843,7 @@ $('tab1').onclick=()=>showTab(1);
 $('tab2').onclick=()=>showTab(2);
 $('tab3').onclick=()=>showTab(3);
 $('tab4').onclick=()=>showTab(4);
+$('tab5').onclick=()=>showTab(5);
 
 // ---- القراءة ----
 NAMES.forEach((n,i)=>{const o=document.createElement('option');o.value=i+1;o.textContent=(i+1)+' - '+n;$('tSurah').appendChild(o);});
@@ -793,8 +883,14 @@ function renderQ(){
 }
 function newQuestion(){
   if(!TEXT){alert('حمّل نص القرآن أولاً.');return;}
-  const r=tRange();
-  const a=r.f+Math.floor(Math.random()*(r.t-r.f+1));
+  let r=tRange(),a;
+  if($('qSrc').value==='manual'){a=r.f+Math.floor(Math.random()*(r.t-r.f+1));}
+  else{
+    const pool=poolFor($('qSrc').value);
+    if(!pool.length){alert('لا توجد مقاطع لهذا الخيار اليوم. تأكد من وجود خطة محفوظة ومهام لليوم.');return;}
+    const pk=pickFromPool(pool,Math.random());
+    r={s:pk.s,f:pk.a,t:pk.a};a=pk.a;
+  }
   let type=$('qType').value;
   if(type==='random')type=['first','hideStart','hideMid','hideEnd'][Math.floor(Math.random()*4)];
   const words=TEXT[r.s-1][a-1].split(' ').filter(Boolean),n=words.length;
@@ -805,6 +901,27 @@ function newQuestion(){
   else{let x=Math.floor(n/3),y=Math.ceil(2*n/3);if(y<=x)y=x+1;for(let i=0;i<n;i++)shown[i]=i<x||i>=y;}
   q={s:r.s,a,words,shown,answered:false};
   renderQ();
+}
+function poolFor(kind){
+  const items=[];
+  if(!plan)return items;
+  const t=todayTasks();
+  if((kind==='today'||kind==='new')&&t.new.chunk)items.push({s:t.new.chunk.s,a1:t.new.chunk.a1,a2:t.new.chunk.a2});
+  if(kind==='today'||kind==='rev'){
+    t.due.forEach(c=>items.push({s:c.s,a1:c.a1,a2:c.a2}));
+    if(t.old&&!t.old.done)t.old.parts.forEach(c=>items.push({s:c.s,a1:c.a1,a2:c.a2}));
+  }
+  return items;
+}
+function pickFromPool(pool,rnd){
+  const total=pool.reduce((x,r)=>x+r.a2-r.a1+1,0);
+  let k=Math.min(total-1,Math.floor(rnd*total));
+  for(const r of pool){const len=r.a2-r.a1+1;if(k<len)return {s:r.s,a:r.a1+k};k-=len;}
+  const l=pool[pool.length-1];return {s:l.s,a:l.a2};
+}
+function quizFromToday(){
+  if(!TEXT){alert('حمّل نص القرآن أولاً (من تبويب قراءة واختبار).');return;}
+  $('qSrc').value='today';showTab(2);q=null;$('mTest').onclick();
 }
 function answerQ(ok){
   if(!q||q.answered)return;
@@ -1066,6 +1183,8 @@ function renderToday(){
   const t=todayTasks(),box=$('todayBox');
   let h='';
   if(missedDays()>=3)h+=`<div class="tip">لم تُنجز الحفظ الجديد في ${missedDays()} أيام من آخر 7. إن كان الهدف ثقيلاً فخفّفه قليلاً. <button class="alt" data-act="lower" style="flex:none;padding:6px 10px;margin-top:6px">قلّل الهدف 20%</button></div>`;
+  if((t.due&&t.due.length)||(t.old&&!t.old.done))h+=`<div class="row" style="margin-bottom:10px"><button class="alt" data-act="autorev">🎧 شغّل مراجعة اليوم</button><button class="alt" data-act="quiztoday">🎯 اختبرني</button></div>`;
+  else h+=`<div class="row" style="margin-bottom:10px"><button class="alt" data-act="quiztoday">🎯 اختبرني</button></div>`;
   h+=`<div class="task"><b>① الحفظ الجديد</b> <small>(${plan.newTime} · ${plan.newMin} د)</small><br>`;
   if(t.new.done)h+='✓ تم اليوم: '+rangeTxt(t.new.chunk);
   else if(t.new.finished)h+='🎉 أتممت كل ما في الخطة.';
@@ -1204,15 +1323,17 @@ $('todayBox').onclick=e=>{
   const b=e.target.closest('button');if(!b||!plan)return;
   const act=b.dataset.act,t=todayStr();
   if(act==='start'){gotoRepeat(+b.dataset.s,+b.dataset.a1,+b.dataset.a2,+b.dataset.reps);return;}
+  if(act==='autorev'){startAutoReview();return;}
+  if(act==='quiztoday'){quizFromToday();return;}
   if(act==='newdone'){
     const c=todayTasks().new.chunk;if(!c)return;
     plan.chunks.push({id:Date.now(),s:c.s,a1:c.a1,a2:c.a2,stage:0,due:addDays(t,1),created:t});
-    plan.pos=c.next;plan.ts.newDone=true;plan.ts.newChunk={s:c.s,a1:c.a1,a2:c.a2};plan.log[t]=true;
+    plan.pos=c.next;plan.ts.newDone=true;plan.ts.newChunk={s:c.s,a1:c.a1,a2:c.a2};plan.log[t]=(c.a2-c.a1+1);
   }else if(act==='good'||act==='weak'){
     const c=plan.chunks.find(x=>x.id===+b.dataset.id);if(!c)return;
-    applyReview(c,act==='good',t);plan.ts.revCount++;
+    applyReview(c,act==='good',t);plan.ts.revCount++;plan.rlog=plan.rlog||{};plan.rlog[t]=(plan.rlog[t]||0)+1;
   }else if(act==='olddone'){
-    const o=takeOldQ(plan.oldPtr,computeCycle(plan).qDay,knownRanges());plan.oldPtr+=o.n;plan.ts.oldDone=true;
+    const o=takeOldQ(plan.oldPtr,computeCycle(plan).qDay,knownRanges());plan.oldPtr+=o.n;plan.ts.oldDone=true;plan.rlog=plan.rlog||{};plan.rlog[t]=(plan.rlog[t]||0)+1;
   }else if(act==='oldweak'){
     plan.chunks.push({id:Date.now(),s:+b.dataset.s,a1:+b.dataset.a1,a2:+b.dataset.a2,stage:0,due:addDays(t,1),created:t});
     statusEl.textContent='سيعود هذا الجزء للمراجعة القريبة غداً';
@@ -1326,6 +1447,125 @@ $('probeAll').onclick=async()=>{
   $('probeMsg').textContent='انتهى الفحص: '+ok+' من '+RECITERS.length+' يعمل دون إنترنت.';
 };
 
+// ---- مراجعة اليوم الصوتية ----
+function reviewItems(){
+  const t=todayTasks(),items=[];
+  t.due.forEach(c=>items.push({s:c.s,a1:c.a1,a2:c.a2}));
+  if(t.old&&!t.old.done)t.old.parts.forEach(c=>items.push({s:c.s,a1:c.a1,a2:c.a2}));
+  return items;
+}
+async function startAutoReview(){
+  const items=reviewItems();
+  if(!items.length){statusEl.textContent='لا توجد مراجعة مستحقة اليوم';return;}
+  await runQueue(items,'مراجعة');
+}
+
+// ---- الإحصاءات ----
+const numLog=v=>typeof v==='number'?v:(v?1:0);
+function lastDaysData(pl,n,today){
+  const out=[];
+  for(let i=n-1;i>=0;i--){const d=addDays(today,-i);out.push({d,n:numLog(pl.log&&pl.log[d]),r:(pl.rlog&&pl.rlog[d])||0});}
+  return out;
+}
+function streakOf(pl,today){
+  if(!pl||!pl.log)return 0;
+  let d=today,n=0;
+  if(!pl.log[d])d=addDays(d,-1);
+  while(pl.log[d]){n++;d=addDays(d,-1);}
+  return n;
+}
+function renderStats(){
+  if(!KN)refreshKnown();
+  const box=$('statsBox'),t=todayStr();
+  const KN2=KN.map(r=>r.slice());
+  if(plan)plan.chunks.forEach(c=>{for(let a=c.a1;a<=c.a2;a++)KN2[c.s-1][a-1]=true;});
+  let q=0;
+  for(let sn=1;sn<=114;sn++)for(let a=1;a<=COUNTS[sn-1];a++)if(KN2[sn-1][a-1])q+=wAy(sn,a);
+  const hz=q/4;
+  let h=`<div>المحفوظ الكلي: <b>${hz.toFixed(1)}</b> حزباً من 60${HQ?'':' (تقديري)'}</div><div class="bar"><i style="width:${Math.min(100,hz/60*100).toFixed(1)}%"></i></div>`;
+  if(plan){
+    const days=Object.keys(plan.log||{}).filter(k=>plan.log[k]).length;
+    const ay=Object.values(plan.log||{}).reduce((x,v)=>x+(typeof v==='number'?v:0),0);
+    const rv=Object.values(plan.rlog||{}).reduce((x,v)=>x+v,0);
+    h+=`<div>أيام الحفظ الجديد: <b>${days}</b> · التتابع الحالي: <b>${streakOf(plan,t)}</b> يوماً</div>`;
+    h+=`<div>آيات حفظتها في الخطة: <b>${ay}</b> · مهام مراجعة أنجزتها: <b>${rv}</b></div>`;
+    const data=lastDaysData(plan,14,t),mx=Math.max(1,...data.map(x=>Math.max(x.n,x.r)));
+    h+='<div class="chart">'+data.map(x=>`<div title="${x.d}"><b class="n" style="height:${(x.n/mx*100).toFixed(0)}%"></b><b class="r" style="height:${(x.r/mx*100).toFixed(0)}%"></b></div>`).join('')+'</div>';
+    h+='<div class="legend">آخر 14 يوماً: <span style="color:#0f766e">■</span> آيات جديدة · <span style="color:#e0a33a">■</span> مهام مراجعة</div>';
+  }else h+='<p class="hint">احفظ خطة من تبويب «الخطة» لتظهر إحصاءات التقدم اليومي.</p>';
+  const ents=Object.entries(stats||{});
+  const ok=ents.reduce((x,e)=>x+e[1].ok,0),bad=ents.reduce((x,e)=>x+e[1].bad,0);
+  h+='<hr style="border:0;border-top:1px solid #cfe3e0;margin:12px 0">';
+  if(ok+bad){
+    h+=`<div>الاختبارات: <b>${ok+bad}</b> سؤالاً · نسبة التذكر <b>${Math.round(ok/(ok+bad)*100)}%</b></div>`;
+    const weak=ents.filter(e=>e[1].bad>0).sort((x,y)=>(y[1].bad/(y[1].ok+y[1].bad))-(x[1].bad/(x[1].ok+x[1].bad))||y[1].bad-x[1].bad).slice(0,5);
+    if(weak.length)h+='<div style="margin-top:6px">الأضعف: '+weak.map(e=>{const p=e[0].split(':').map(Number);return NAMES[p[0]-1]+' آية '+p[1];}).join('، ')+'</div>';
+  }else h+='<p class="hint">لا توجد نتائج اختبار بعد.</p>';
+  box.innerHTML=h;
+}
+
+// ---- المظهر ----
+function applyTheme(){
+  let dark=cfg.theme==='dark';
+  if(cfg.theme==='auto'){try{dark=!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);}catch(e){}}
+  document.body.classList.toggle('dark',dark);
+  const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',dark?'#0b2523':'#0f766e');
+  document.documentElement.style.setProperty('--qfs',(cfg.fs||26)+'px');
+  $('fsVal').textContent=String(cfg.fs||26);
+}
+$('theme').value=cfg.theme;$('fs').value=cfg.fs;
+$('theme').onchange=()=>{cfg.theme=$('theme').value;save('cfg',cfg);applyTheme();};
+$('fs').oninput=()=>{cfg.fs=+$('fs').value;save('cfg',cfg);applyTheme();};
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(cfg.theme==='auto')applyTheme();});}catch(e){}
+
+// ---- النسخ الاحتياطي ----
+const BK_KEYS=['plan','oldR','memQ','mem','cfg','last','stats'];
+const blobToB64=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]||'');r.onerror=()=>rej(r.error);r.readAsDataURL(b);});
+function b64ToBlob(b64,type){const bin=atob(b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type:type||'audio/webm'});}
+let bkFile=null;
+$('bkMake').onclick=async()=>{
+  $('bkMsg').textContent='جارٍ التجهيز...';$('bkOut').hidden=true;
+  try{
+    const data={};
+    BK_KEYS.forEach(k=>{try{const v=localStorage.getItem(k);if(v!=null)data[k]=JSON.parse(v);}catch(e){}});
+    const obj={app:'quran-hifz',v:1,t:new Date().toISOString(),data,rec:[]};
+    if($('bkRec').checked){const all=await recAll();for(const r of all)obj.rec.push({s:r.s,a:r.a,t:r.t,type:r.blob.type,d:await blobToB64(r.blob)});}
+    const name='hifz-backup-'+todayStr()+'.json';
+    bkFile=new File([JSON.stringify(obj)],name,{type:'application/json'});
+    $('bkOut').hidden=false;
+    $('bkMsg').textContent='جاهزة: '+name+' ('+Math.max(1,Math.round(bkFile.size/1024))+' ك.ب، تسجيلات: '+obj.rec.length+')';
+  }catch(e){$('bkMsg').textContent='تعذّر تجهيز النسخة: '+(e&&e.message||e);}
+};
+$('bkShare').onclick=async()=>{
+  if(!bkFile)return;
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[bkFile]})){await navigator.share({files:[bkFile],title:'نسخة حفظ القرآن الاحتياطية'});return;}
+    $('bkMsg').textContent='المشاركة غير متاحة هنا. استخدم «حفظ الملف».';
+  }catch(e){if(!(e&&e.name==='AbortError'))$('bkMsg').textContent='تعذّرت المشاركة: '+(e&&e.message||e);}
+};
+$('bkSave').onclick=()=>{
+  if(!bkFile)return;
+  const u=URL.createObjectURL(bkFile),a=document.createElement('a');
+  a.href=u;a.download=bkFile.name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),10000);
+};
+$('bkImport').onclick=()=>$('bkFile').click();
+$('bkFile').onchange=async()=>{
+  const f=$('bkFile').files[0];$('bkFile').value='';
+  if(!f)return;
+  try{
+    const obj=JSON.parse(await f.text());
+    if(!obj||obj.app!=='quran-hifz'||!obj.data)throw new Error('الملف ليس نسخة احتياطية لهذا التطبيق');
+    const nr=(obj.rec||[]).length;
+    if(!confirm('ستُستبدل بياناتك الحالية (الخطة والمحفوظات والإعدادات'+(nr?' والتسجيلات':'')+') بما في هذا الملف ('+String(obj.t||'').slice(0,10)+'). المتابعة؟'))return;
+    Object.keys(obj.data).forEach(k=>{if(BK_KEYS.includes(k))localStorage.setItem(k,JSON.stringify(obj.data[k]));});
+    if(nr){await recClear();for(const r of obj.rec)await recPut(keyOf(r.s,r.a),{s:r.s,a:r.a,t:r.t,blob:b64ToBlob(r.d,r.type)});}
+    alert('تمت الاستعادة. ستُعاد تحميل الصفحة.');
+    location.reload();
+  }catch(e){alert('تعذّرت الاستعادة: '+(e&&e.message||e));}
+};
+
+applyTheme();
 updateNote();
 refreshKnown();fillTimes();fillForm();renderPlan();
 refreshRecInfo();refreshRecList();
