@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>اختبار نموذج التلاوة</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<script>
+/*
+ * mel.js — استخراج ميزات log-mel بنفس طريقة NeMo (AudioToMelSpectrogramPreprocessor).
+ * مستقل: يعمل في المتصفح (window.QuranMel) وفي Node (require).
+ *
+ * الإعدادات من preprocessor.json: 16kHz، نافذة 25ms، خطوة 10ms، n_fft=512،
+ * 80 نطاق mel، hann، normalize=per_feature، dither=1e-5 (يُستخدم في التدريب فقط، فلا نطبقه).
+ *
+ * compute(samples: Float32Array في [-1,1]) → { data: Float32Array [80*T] (صف لكل نطاق)، mels: 80, frames: T, seqLen }
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.QuranMel = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+
+  const DEFAULTS = {
+    sampleRate: 16000, nFft: 512, winLength: 400, hop: 160, nMels: 80,
+    preemph: 0.97, fMin: 0, fMax: null, logGuard: Math.pow(2, -24),
+    padMode: 'constant',   // constant | reflect  (يُحدَّد بالمقارنة مع NeMo)
+    normEps: 1e-5,
+    seqLenMode: 'floor',   // floor: seq_len = floor(n/hop) ، full: كل الإطارات
+  };
+
+  // ---------- مقياس mel (slaney، كما في librosa) ----------
+  const F_SP = 200 / 3, MIN_LOG_HZ = 1000, MIN_LOG_MEL = MIN_LOG_HZ / F_SP, LOGSTEP = Math.log(6.4) / 27;
+  const hzToMel = (f) => (f >= MIN_LOG_HZ ? MIN_LOG_MEL + Math.log(f / MIN_LOG_HZ) / LOGSTEP : f / F_SP);
+  const melToHz = (m) => (m >= MIN_LOG_MEL ? MIN_LOG_HZ * Math.exp(LOGSTEP * (m - MIN_LOG_MEL)) : F_SP * m);
+
+  function melFilterbank(sr, nFft, nMels, fMin, fMax) {
+    const nBins = nFft / 2 + 1;
+    const fftFreqs = new Float64Array(nBins);
+    for (let i = 0; i < nBins; i++) fftFreqs[i] = (i * sr) / nFft;
+    const lo = hzToMel(fMin), hi = hzToMel(fMax);
+    const melF = new Float64Array(nMels + 2);
+    for (let i = 0; i < nMels + 2; i++) melF[i] = melToHz(lo + ((hi - lo) * i) / (nMels + 1));
+    const W = [];
+    for (let m = 0; m < nMels; m++) {
+      const row = new Float64Array(nBins);
+      const fdLow = melF[m + 1] - melF[m], fdHigh = melF[m + 2] - melF[m + 1];
+      const enorm = 2 / (melF[m + 2] - melF[m]);
+      for (let k = 0; k < nBins; k++) {
+        const lower = (fftFreqs[k] - melF[m]) / fdLow;
+        const upper = (melF[m + 2] - fftFreqs[k]) / fdHigh;
+        row[k] = Math.max(0, Math.min(lower, upper)) * enorm;
+      }
+      W.push(row);
+    }
+    return W;
+  }
+
+  // ---------- FFT (radix-2) ----------
+  function makeFFT(n) {
+    const levels = Math.log2(n);
+    const cos = new Float64Array(n / 2), sin = new Float64Array(n / 2);
+    for (let i = 0; i < n / 2; i++) { cos[i] = Math.cos((2 * Math.PI * i) / n); sin[i] = Math.sin((2 * Math.PI * i) / n); }
+    const rev = new Uint32Array(n);
+    for (let i = 0; i < n; i++) {
+      let r = 0;
+      for (let b = 0; b < levels; b++) r |= ((i >>> b) & 1) << (levels - 1 - b);
+      rev[i] = r;
+    }
+    return function (re, im) {
+      for (let i = 0; i < n; i++) {
+        const j = rev[i];
+        if (j > i) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+      }
+      for (let size = 2; size <= n; size *= 2) {
+        const half = size / 2, step = n / size;
+        for (let i = 0; i < n; i += size) {
+          for (let j = i, k = 0; j < i + half; j++, k += step) {
+            const l = j + half;
+            const tr = re[l] * cos[k] + im[l] * sin[k];
+            const ti = -re[l] * sin[k] + im[l] * cos[k];
+            re[l] = re[j] - tr; im[l] = im[j] - ti;
+            re[j] += tr; im[j] += ti;
+          }
+        }
+      }
+    };
+  }
+
+  function hannSymmetric(n) { // torch.hann_window(n, periodic=False)
+    const w = new Float64Array(n);
+    for (let i = 0; i < n; i++) w[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (n - 1));
+    return w;
+  }
+
+  function padIndex(i, n, mode) {
+    if (i >= 0 && i < n) return i;
+    if (mode === 'reflect') {
+      if (i < 0) return -i;
+      return 2 * (n - 1) - i;
+    }
+    return -1; // constant → 0
+  }
+
+  function create(opts) {
+    const c = Object.assign({}, DEFAULTS, opts || {});
+    const fMax = c.fMax == null ? c.sampleRate / 2 : c.fMax;
+    const fb = melFilterbank(c.sampleRate, c.nFft, c.nMels, c.fMin, fMax);
+    const fft = makeFFT(c.nFft);
+    const win = hannSymmetric(c.winLength);
+    const winOff = (c.nFft - c.winLength) >> 1; // torch يوسّط النافذة داخل n_fft
+    const nBins = c.nFft / 2 + 1;
+
+    function compute(samples) {
+      const n = samples.length;
+      // 1) pre-emphasis
+      const x = new Float64Array(n);
+      if (n) x[0] = samples[0];
+      for (let i = 1; i < n; i++) x[i] = samples[i] - c.preemph * samples[i - 1];
+
+      // 2) STFT مع center=True
+      const pad = c.nFft >> 1;
+      const frames = Math.floor(n / c.hop) + 1;
+      const re = new Float64Array(c.nFft), im = new Float64Array(c.nFft);
+      const power = new Float64Array(nBins);
+      const logmel = new Float64Array(c.nMels * frames);
+      for (let t = 0; t < frames; t++) {
+        re.fill(0); im.fill(0);
+        const start = t * c.hop - pad;
+        for (let k = 0; k < c.winLength; k++) {
+          const idx = padIndex(start + winOff + k, n, c.padMode);
+          re[winOff + k] = idx < 0 ? 0 : x[idx] * win[k];
+        }
+        fft(re, im);
+        for (let k = 0; k < nBins; k++) power[k] = re[k] * re[k] + im[k] * im[k];
+        // 3) mel + log
+        for (let m = 0; m < c.nMels; m++) {
+          const row = fb[m];
+          let s = 0;
+          for (let k = 0; k < nBins; k++) s += row[k] * power[k];
+          logmel[m * frames + t] = Math.log(s + c.logGuard);
+        }
+      }
+
+      // 4) تطبيع per_feature على الإطارات الصالحة
+      const seqLen = c.seqLenMode === 'full' ? frames : Math.min(frames, Math.floor(n / c.hop));
+      const out = new Float32Array(c.nMels * frames);
+      for (let m = 0; m < c.nMels; m++) {
+        let mean = 0;
+        for (let t = 0; t < seqLen; t++) mean += logmel[m * frames + t];
+        mean /= seqLen;
+        let v = 0;
+        for (let t = 0; t < seqLen; t++) { const d = logmel[m * frames + t] - mean; v += d * d; }
+        const std = Math.sqrt(v / Math.max(1, seqLen - 1));
+        for (let t = 0; t < seqLen; t++) out[m * frames + t] = (logmel[m * frames + t] - mean) / (std + c.normEps);
+        // الإطارات بعد seqLen تبقى 0 (pad_value)
+      }
+      return { data: out, mels: c.nMels, frames, seqLen };
+    }
+
+    return { compute, config: c };
+  }
+
+  return { create, melFilterbank, hzToMel, melToHz, DEFAULTS };
+});
+
+</script>
+<script>
+/*
+ * ctc.js — فك ترميز مخرجات النموذج (logprobs) إلى نص. greedy CTC.
+ * مستقل: window.QuranCTC في المتصفح، require في Node.
+ *
+ * مخرج النموذج: logprobs بشكل [1, T, 1025] — الرموز 0..1023 والصمت (blank) هو 1024.
+ * tokens.txt: سطر لكل رمز (بدون سطر للصمت).
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.QuranCTC = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+
+  function parseTokens(text) {
+    // لا نستخدم trim: بعض القطع قد تكون مسافة فقط (▁)
+    return String(text).replace(/\r/g, '').split('\n');
+  }
+
+  /*
+   * logprobs: Float32Array مسطّح [T * V]، T إطار، V = tokens.length + 1
+   * length: عدد الإطارات الصالحة (اختياري)
+   * يرجع { text, confidence (متوسط أفضل احتمال للرموز المنطوقة 0..1)، ids }
+   */
+  function greedy(logprobs, T, V, tokens, length) {
+    const blank = V - 1;
+    const n = length == null ? T : Math.min(T, length);
+    const ids = [];
+    let prev = -1, confSum = 0, confN = 0;
+    for (let t = 0; t < n; t++) {
+      let best = 0, bv = -Infinity;
+      const o = t * V;
+      for (let v = 0; v < V; v++) { const x = logprobs[o + v]; if (x > bv) { bv = x; best = v; } }
+      if (best !== prev && best !== blank) { ids.push(best); confSum += Math.exp(bv); confN++; }
+      prev = best;
+    }
+    const text = ids.map((i) => tokens[i] || '').join('').replace(/▁/g, ' ').replace(/\s+/g, ' ').trim();
+    return { text, ids, confidence: confN ? confSum / confN : 0 };
+  }
+
+  return { parseTokens, greedy };
+});
+
+</script>
+<script>
+/*
+ * matcher.js — مطابقة نص التلاوة (ناتج النموذج) مع نص الآية.
+ * مستقلة تماماً: تعمل في المتصفح (window.QuranMatcher) وفي Node (require).
+ * لا تعتمد على index.html ولا على النموذج.
+ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.QuranMatcher = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+
+  // تشكيل + علامات المصحف + تطويل + رموز اتجاه
+  const MARKS = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640\u200C-\u200F]/g;
+
+  // تطبيع متساهل: يوحّد الصور الإملائية التي يختلف فيها الرسم العثماني عن الإملائي
+  function normalize(t) {
+    return String(t == null ? '' : t)
+      .replace(MARKS, '')
+      .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627') // آ أ إ ٱ -> ا
+      .replace(/\u0649/g, '\u064A')                      // ى -> ي
+      .replace(/\u0629/g, '\u0647')                      // ة -> ه
+      .replace(/\u0624/g, '\u0648')                      // ؤ -> و
+      .replace(/\u0626/g, '\u064A')                      // ئ -> ي
+      .replace(/\u0621/g, '')                            // ء
+      .replace(/[^\u0621-\u064A\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  const words = (t) => { const n = normalize(t); return n ? n.split(' ') : []; };
+
+  function levenshtein(a, b) {
+    if (a === b) return 0;
+    const m = a.length, n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    let prev = new Array(n + 1), cur = new Array(n + 1);
+    for (let j = 0; j <= n; j++) prev[j] = j;
+    for (let i = 1; i <= m; i++) {
+      cur[0] = i;
+      for (let j = 1; j <= n; j++) {
+        const c = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + c);
+      }
+      [prev, cur] = [cur, prev];
+    }
+    return prev[n];
+  }
+
+  // تشابه كلمتين من 0 إلى 1
+  function sim(a, b) {
+    const L = Math.max(a.length, b.length);
+    return L ? 1 - levenshtein(a, b) / L : 1;
+  }
+
+  const OK = 0.8, CLOSE = 0.5, GAP = 0.7;
+
+  /*
+   * يحاذي كلمات المرجع (الآية) مع كلمات النموذج.
+   * يرجع: score (0..1)، words (حالة كل كلمة من الآية)، extra (كلمات زائدة نطقها القارئ)
+   * الحالات: ok | close | wrong | missing
+   */
+  function compare(refText, hypText) {
+    const R = words(refText), H = words(hypText);
+    const n = R.length, m = H.length;
+    const S = Array.from({ length: n }, (_, i) => Array.from({ length: m }, (_, j) => sim(R[i], H[j])));
+    const D = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    for (let i = 1; i <= n; i++) D[i][0] = i * GAP;
+    for (let j = 1; j <= m; j++) D[0][j] = j * GAP;
+    for (let i = 1; i <= n; i++) {
+      for (let j = 1; j <= m; j++) {
+        D[i][j] = Math.min(
+          D[i - 1][j - 1] + (1 - S[i - 1][j - 1]),
+          D[i - 1][j] + GAP,
+          D[i][j - 1] + GAP
+        );
+      }
+    }
+    const out = new Array(n), extra = [];
+    let i = n, j = m;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && Math.abs(D[i][j] - (D[i - 1][j - 1] + (1 - S[i - 1][j - 1]))) < 1e-9) {
+        const s = S[i - 1][j - 1];
+        out[i - 1] = { ref: R[i - 1], hyp: H[j - 1], sim: s, status: s >= OK ? 'ok' : s >= CLOSE ? 'close' : 'wrong' };
+        i--; j--;
+      } else if (i > 0 && Math.abs(D[i][j] - (D[i - 1][j] + GAP)) < 1e-9) {
+        out[i - 1] = { ref: R[i - 1], hyp: null, sim: 0, status: 'missing' };
+        i--;
+      } else {
+        extra.unshift(H[j - 1]);
+        j--;
+      }
+    }
+    let got = 0;
+    out.forEach((w) => { if (w.sim >= CLOSE) got += w.sim; });
+    const score = n ? got / (n + extra.length * 0.5) : 0;
+    return { score, words: out, extra, refCount: n, hypCount: m };
+  }
+
+  /*
+   * يحدد أي آيات من السورة تُقرأ: يجرب كل بداية وأطوالاً من 1 إلى maxSpan آية.
+   * ayahs: مصفوفة نصوص آيات السورة (فهرس 0 = آية 1).
+   * يرجع أفضل نتيجة + أفضل 3 بدائل.
+   */
+  function locate(hypText, ayahs, opts) {
+    const maxSpan = (opts && opts.maxSpan) || 3;
+    const from = (opts && opts.from) || 1, to = (opts && opts.to) || ayahs.length;
+    const res = [];
+    for (let a = from; a <= to; a++) {
+      let joined = '';
+      for (let k = 0; k < maxSpan && a + k <= to; k++) {
+        joined += (k ? ' ' : '') + ayahs[a + k - 1];
+        const c = compare(joined, hypText);
+        res.push({ from: a, to: a + k, score: c.score });
+      }
+    }
+    res.sort((x, y) => y.score - x.score || (x.to - x.from) - (y.to - y.from));
+    return { best: res[0] || null, top: res.slice(0, 3) };
+  }
+
+  return { normalize, words, levenshtein, sim, compare, locate };
+});
+
+</script>
+<style>
+  :root { --bg:#f0f7f6; --card:#fff; --fg:#10302d; --muted:#5b7370; --acc:#0f766e; --ok:#15803d; --close:#b45309; --bad:#b91c1c; --line:#d6e4e2; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0e1a19; --card:#162624; --fg:#e4f1ef; --muted:#93aca8; --acc:#2dd4bf; --ok:#4ade80; --close:#fbbf24; --bad:#f87171; --line:#27403d; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:16px/1.7 system-ui, "Segoe UI", Tahoma, sans-serif; }
+  main { max-width:640px; margin:0 auto; }
+  h1 { font-size:1.3rem; margin:0 0 4px; }
+  .muted { color:var(--muted); font-size:.9rem; margin:0 0 14px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  button, .filebtn { font:inherit; background:var(--acc); color:#fff; border:0; border-radius:10px; padding:10px 16px; cursor:pointer; display:inline-block; margin:2px 0; }
+  @media (prefers-color-scheme: dark) { button, .filebtn { color:#06201d; } }
+  button:disabled, .filebtn.off { opacity:.45; cursor:not-allowed; }
+  .filebtn input { display:none; }
+  button.rec { background:var(--bad); color:#fff; }
+  textarea { width:100%; font:inherit; font-size:1.15rem; padding:8px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); }
+  progress { width:100%; height:12px; margin-top:8px; }
+  .big { font-size:1.5rem; line-height:2.1; word-spacing:.2em; }
+  .w-ok { color:var(--ok); } .w-close { color:var(--close); } .w-wrong { color:var(--bad); font-weight:700; }
+  .w-missing { color:var(--bad); text-decoration:line-through; opacity:.8; }
+  .stat { color:var(--muted); font-size:.88rem; }
+  pre#log { background:#0b1514; color:#9be8dc; padding:10px; border-radius:8px; font-size:.78rem; line-height:1.5; max-height:260px; overflow:auto; white-space:pre-wrap; direction:ltr; text-align:left; }
+  label.lbl { display:block; font-size:.9rem; color:var(--muted); margin-bottom:4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>اختبار نموذج التلاوة</h1>
+  <p class="muted">صفحة اختبار مستقلة، لا علاقة لها بـ index.html. كل شيء يعمل داخل المتصفح.</p>
+
+  <section>
+    <button id="btnLoad">١) تحميل النموذج (نحو 131MB)</button>
+    <progress id="prog" value="0" max="1" hidden></progress>
+    <div id="loadInfo" class="stat">لم يُحمَّل بعد. يُحفظ بعد أول مرة فلا يُحمَّل ثانية.</div>
+  </section>
+
+  <section>
+    <label class="lbl" for="ref">نص الآية المرجعي (اختياري، للمقارنة)</label>
+    <textarea id="ref" rows="2" placeholder="مثال: إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ"></textarea>
+  </section>
+
+  <section>
+    <button id="btnRec" disabled>٢) سجّل تلاوتك</button>
+    <label class="filebtn off" id="fileLbl">أو اختر ملفاً صوتياً<input type="file" id="file" accept="audio/*" disabled></label>
+  </section>
+
+  <section id="result" hidden>
+    <div class="stat" id="stats"></div>
+    <div class="big" id="text"></div>
+    <div class="stat" id="match"></div>
+    <div class="big" id="words"></div>
+  </section>
+
+  <section>
+    <pre id="log"></pre>
+    <button id="btnCopy" type="button">نسخ السجل</button>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  const BASE = 'https://huggingface.co/noubou/quran-asr-onnx/resolve/main/';
+  const MODEL_URL = BASE + 'model.int8.onnx';
+  const TOKENS_URL = BASE + 'tokens.txt';
+  const ORT_BASE = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+  const CACHE_NAME = 'asr-model';
+
+  const $ = (id) => document.getElementById(id);
+  const logEl = $('log');
+  const t00 = performance.now();
+  function log(msg) {
+    const s = ((performance.now() - t00) / 1000).toFixed(1).padStart(6) + 's  ' + msg;
+    logEl.textContent += s + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+    try { console.log(msg); } catch (e) {}
+  }
+  window.addEventListener('error', (e) => log('خطأ: ' + (e.message || e)));
+  window.addEventListener('unhandledrejection', (e) => log('خطأ (وعد): ' + (e.reason && (e.reason.message || e.reason))));
+  $('btnCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(logEl.textContent); $('btnCopy').textContent = 'تم النسخ ✓'; }
+    catch (e) { const r = document.createRange(); r.selectNodeContents(logEl); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $('btnCopy').textContent = 'حدّد النص ثم انسخه'; }
+    setTimeout(() => { $('btnCopy').textContent = 'نسخ السجل'; }, 2500);
+  };
+
+  let session = null, tokens = null;
+  const mel = window.QuranMel ? window.QuranMel.create() : null;
+
+  log('المتصفح: ' + navigator.userAgent);
+  log('ort: ' + (window.ort ? 'محمَّل' : 'لم يُحمَّل (تحقق من الإنترنت)') + ' | crossOriginIsolated=' + window.crossOriginIsolated + ' | cores=' + navigator.hardwareConcurrency);
+  if (window.ort) {
+    ort.env.wasm.wasmPaths = ORT_BASE;
+    ort.env.wasm.numThreads = window.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1;
+  }
+
+  async function fetchWithProgress(url, onProgress) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url);
+    const total = +res.headers.get('content-length') || 0;
+    const reader = res.body.getReader();
+    const chunks = []; let got = 0;
+    for (;;) {
+      const r = await reader.read();
+      if (r.done) break;
+      chunks.push(r.value); got += r.value.length;
+      onProgress(got, total);
+    }
+    const buf = new Uint8Array(got); let o = 0;
+    for (const c of chunks) { buf.set(c, o); o += c.length; }
+    return buf;
+  }
+
+  async function cachedBytes(url, onProgress) {
+    let cache = null;
+    try { cache = await caches.open(CACHE_NAME); } catch (e) { log('Cache Storage غير متاح: ' + e.message); }
+    if (cache) {
+      const hit = await cache.match(url);
+      if (hit) { log('من الذاكرة المحلية: ' + url.split('/').pop()); return new Uint8Array(await hit.arrayBuffer()); }
+    }
+    const buf = await fetchWithProgress(url, onProgress);
+    if (cache) { try { await cache.put(url, new Response(buf)); } catch (e) { log('تعذّر الحفظ محلياً: ' + e.message); } }
+    return buf;
+  }
+
+  $('btnLoad').onclick = async () => {
+    $('btnLoad').disabled = true;
+    try {
+      if (!window.ort || !mel) throw new Error('مكتبة ort أو mel.js لم تُحمَّل');
+      const prog = $('prog'); prog.hidden = false;
+      const info = $('loadInfo');
+      info.textContent = 'جارٍ تحميل الرموز...';
+      const tk = await cachedBytes(TOKENS_URL, () => {});
+      tokens = QuranCTC.parseTokens(new TextDecoder().decode(tk));
+      log('الرموز: ' + tokens.length);
+      const t0 = performance.now();
+      const bytes = await cachedBytes(MODEL_URL, (got, total) => {
+        prog.max = total || got; prog.value = got;
+        info.textContent = 'تحميل النموذج: ' + (got / 1e6).toFixed(1) + (total ? ' / ' + (total / 1e6).toFixed(1) : '') + ' MB';
+      });
+      log('حجم النموذج: ' + (bytes.length / 1e6).toFixed(1) + ' MB (' + ((performance.now() - t0) / 1000).toFixed(1) + 's)');
+      info.textContent = 'جارٍ تهيئة النموذج...';
+      const t1 = performance.now();
+      session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+      log('تهيئة النموذج: ' + ((performance.now() - t1) / 1000).toFixed(1) + 's | inputs=' + session.inputNames + ' | outputs=' + session.outputNames);
+      info.textContent = 'النموذج جاهز ✓';
+      prog.hidden = true;
+      $('btnRec').disabled = false; $('file').disabled = false; $('fileLbl').classList.remove('off');
+    } catch (e) {
+      log('فشل التحميل/التهيئة: ' + (e && e.message || e));
+      $('loadInfo').textContent = 'فشل: ' + (e && e.message || e);
+      $('btnLoad').disabled = false;
+    }
+  };
+
+  async function toMono16k(arrayBuffer) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    const buf = await ctx.decodeAudioData(arrayBuffer.slice(0));
+    try { ctx.close(); } catch (e) {}
+    const len = Math.max(1, Math.ceil(buf.duration * 16000));
+    const off = new OfflineAudioContext(1, len, 16000);
+    const src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start();
+    const rendered = await off.startRendering();
+    return rendered.getChannelData(0);
+  }
+
+  async function recognize(samples) {
+    const secs = samples.length / 16000;
+    log('الصوت: ' + secs.toFixed(2) + ' ثانية');
+    const t0 = performance.now();
+    const m = mel.compute(samples);
+    const t1 = performance.now();
+    const feeds = {};
+    feeds[session.inputNames[0]] = new ort.Tensor('float32', m.data, [1, m.mels, m.frames]);
+    feeds[session.inputNames[1]] = new ort.Tensor('int64', BigInt64Array.from([BigInt(m.seqLen)]), [1]);
+    const out = await session.run(feeds);
+    const t2 = performance.now();
+    const lp = out[session.outputNames[0]];
+    const T = lp.dims[1], V = lp.dims[2];
+    const r = QuranCTC.greedy(lp.data, T, V, tokens);
+    const melMs = t1 - t0, netMs = t2 - t1;
+    log('mel: ' + melMs.toFixed(0) + 'ms | النموذج: ' + netMs.toFixed(0) + 'ms | إطارات=' + m.frames + ' → ' + T + ' | الثقة=' + r.confidence.toFixed(3));
+    $('result').hidden = false;
+    $('stats').textContent = 'المدة ' + secs.toFixed(1) + 'ث | المعالجة ' + ((melMs + netMs) / 1000).toFixed(2) + 'ث (×' + ((melMs + netMs) / 1000 / secs).toFixed(2) + ' من زمن الصوت) | الثقة ' + (r.confidence * 100).toFixed(0) + '%';
+    $('text').textContent = r.text || '(لم يُتعرَّف على كلام)';
+    log('النص: ' + r.text);
+    renderMatch(r.text);
+  }
+
+  function renderMatch(hyp) {
+    const ref = $('ref').value.trim();
+    const matchEl = $('match'), wordsEl = $('words');
+    wordsEl.textContent = ''; matchEl.textContent = '';
+    if (!ref) return;
+    const c = QuranMatcher.compare(ref, hyp);
+    matchEl.textContent = 'نسبة التطابق مع الآية: ' + Math.round(c.score * 100) + '%' + (c.extra.length ? ' | كلمات زائدة: ' + c.extra.join(' ') : '');
+    c.words.forEach((w) => {
+      const s = document.createElement('span');
+      s.className = 'w-' + w.status; s.textContent = w.ref + ' ';
+      wordsEl.appendChild(s);
+    });
+    log('مطابقة: ' + Math.round(c.score * 100) + '% | ' + c.words.map((w) => w.status).join(','));
+  }
+
+  async function handleBuffer(ab) {
+    try {
+      const samples = await toMono16k(ab);
+      await recognize(samples);
+    } catch (e) { log('فشل التعرّف: ' + (e && e.message || e)); }
+  }
+
+  $('file').onchange = async (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    log('ملف: ' + f.name + ' (' + (f.size / 1e3).toFixed(0) + ' KB)');
+    await handleBuffer(await f.arrayBuffer());
+    ev.target.value = '';
+  };
+
+  let rec = null, recChunks = [], recStream = null;
+  $('btnRec').onclick = async () => {
+    if (rec && rec.state === 'recording') { rec.stop(); return; }
+    try {
+      recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recChunks = [];
+      rec = new MediaRecorder(recStream);
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+      rec.onstop = async () => {
+        recStream.getTracks().forEach((t) => t.stop());
+        $('btnRec').textContent = '٢) سجّل تلاوتك'; $('btnRec').classList.remove('rec');
+        const blob = new Blob(recChunks, { type: rec.mimeType });
+        log('تسجيل: ' + (blob.size / 1e3).toFixed(0) + ' KB | ' + rec.mimeType);
+        await handleBuffer(await blob.arrayBuffer());
+      };
+      rec.start();
+      $('btnRec').textContent = '⏹ إيقاف التسجيل'; $('btnRec').classList.add('rec');
+    } catch (e) { log('تعذّر الوصول للميكروفون: ' + (e && e.message || e)); }
+  };
+
+  window.__asr = { recognize, toMono16k, getSession: () => session };
+})();
+</script>
+</body>
+</html>
