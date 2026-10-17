@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مراجعة الحفظ — التلاوة المباشرة</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#17212b;background:#f4f7f8}body{margin:0;padding:16px;max-width:850px;margin-inline:auto}h1{font-size:1.45rem;line-height:1.5}.card{background:white;border:1px solid #dce3e5;border-radius:16px;padding:16px;margin:14px 0}button{border:0;border-radius:11px;padding:13px 16px;font-size:1rem;background:#17694f;color:white;margin:5px}button:disabled{opacity:.45}#status{background:#edf4f1;padding:12px;border-radius:10px;white-space:pre-wrap;line-height:1.7}.small{font-size:.9rem;color:#52616a;line-height:1.7}#liveText{font-size:1.35rem;line-height:2.3;min-height:90px;white-space:pre-wrap}.word{display:inline-block;margin:0 2px;padding:0 3px;border-radius:5px}.matched{color:#16834a}.pending{color:#5d6870}.bad{color:#c62828}.pill{display:inline-block;background:#e8f1ed;border-radius:20px;padding:4px 10px;margin:3px;font-size:.85rem}
+</style></head><body>
+<h1>مراجعة الحفظ — التلاوة المباشرة (نسخة تجريبية مستقلة)</h1>
+<div class="card"><p>هذه نسخة اختبار منفصلة؛ لا تغيّر النموذج السابق ولا ملف <code>index.html</code>. تستخدم محرك Zipformer المتدفق من Tilawa، وليس FastConformer. تحتاج إلى تنزيل النموذج والملف الصوتي المرجعي أول مرة، ثم يحاول المتصفح حفظهما في ذاكرة التخزين المؤقت.</p><p class="small">تتم المعالجة محليًا في المتصفح. الأداء يعتمد على الهاتف أو الحاسوب والاتصال عند أول تنزيل. النموذج Zipformer وبياناته مرخصة للاستخدام غير التجاري وبمشاركة مماثلة (NPL-1.2)، راجع ترخيص المشروع قبل نشره أو استخدامه تجاريًا.</p><button id="loadBtn">تحميل محرك التلاوة المباشرة</button><div id="status" role="status">اضغط تحميل المحرك أولًا.</div></div>
+<div class="card"><h2>التلاوة</h2><button id="startBtn" disabled>بدء التلاوة المباشرة</button><button id="stopBtn" disabled>إيقاف التلاوة</button><span class="pill" id="engineState">المحرك غير محمّل</span><p class="small">تظهر النتائج تدريجيًا عند تعرّف المحرك عليها. قد يتأخر النص أو يتغير أثناء القراءة، لذلك راجع الكلمات قبل الاعتماد عليها في تقييم الحفظ.</p></div>
+<div class="card"><h2>النص المتعرّف عليه</h2><div id="liveText">لم تبدأ التلاوة بعد.</div><p id="verseInfo" class="small"></p></div>
+<div class="card"><h2>أحداث التعرّف (للتشخيص)</h2><div id="events" class="small">ستظهر حالة التعرّف هنا.</div></div>
+<script type="module">
+const $=id=>document.getElementById(id); const say=t=>$('status').textContent=t;
+const CACHE='quran-live-zipformer-v1';
+const MODEL='https://huggingface.co/noubou/quran-zipformer-live/resolve/main/zipformer_interp_gentle_a05.int8.onnx?download=true';
+const CORPUS='https://huggingface.co/noubou/quran-zipformer-live/resolve/main/zipformer_quran.json?download=true';
+const QURAN='https://huggingface.co/noubou/quran-zipformer-live/resolve/main/quran.json?download=true';
+let ort,session,stream,ctx,source,processor,silence,active=false,queue=Promise.resolve(),lastVerse='',latestWordIndex=-1,matched=new Set(),eventCount=0;
+async function cached(url,type){
+ let response;
+ try { if('caches' in window){const c=await caches.open(CACHE);response=await c.match(url);if(response){say('استخدام ملف محفوظ: '+url.split('/').pop());return type==='json'?response.json():response.arrayBuffer();}} }catch(e){console.warn(e)}
+ say('جارٍ تنزيل '+url.split('/').pop()+' — قد يستغرق ذلك بعض الوقت أول مرة…');response=await fetch(url);if(!response.ok)throw new Error('فشل تحميل الملف '+url.split('/').pop()+' (HTTP '+response.status+'). تأكد من وجود الملف في مستودع Hugging Face.');
+ if('caches' in window){try{await (await caches.open(CACHE)).put(url,response.clone())}catch(e){console.warn('تعذر حفظ الملف مؤقتًا',e)}}
+ return type==='json'?response.json():response.arrayBuffer();
+}
+function eventLog(s){const el=$('events');el.textContent=(s+'\n'+el.textContent).slice(0,1400)}
+function renderWords(text,indices=[]){const words=(text||'').trim().split(/\s+/).filter(Boolean);if(!words.length)return;$('liveText').innerHTML=words.map((w,i)=>`<span class="word ${indices.includes(i)?'matched':'pending'}">${escapeHtml(w)}</span>`).join(' ')}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function handleEvent(msg){eventCount++;
+ if(msg.type==='verse_match'){
+   lastVerse=msg.verse_text||lastVerse;latestWordIndex=-1;matched=new Set();renderWords(lastVerse,[]);
+   $('verseInfo').textContent=`السورة ${msg.surah} — الآية ${msg.ayah}${msg.confidence!=null?' — الثقة '+Number(msg.confidence).toFixed(2):''}`;
+   eventLog(`تم تحديد الآية ${msg.surah}:${msg.ayah}`);
+ }else if(msg.type==='word_progress'){
+   if(msg.matched_indices) matched=new Set(msg.matched_indices);
+   latestWordIndex=msg.word_index??latestWordIndex;
+   if(lastVerse)renderWords(lastVerse,[...matched]);
+   $('engineState').textContent=`تقدّم الكلمات: ${Math.max(0,latestWordIndex+1)}/${msg.total_words||'؟'}`;
+ }else if(msg.type==='raw_transcript'){
+   if(msg.text){$('liveText').textContent=msg.text;}
+   eventLog('تحديث نص التعرّف…');
+ }else if(msg.type==='verse_candidate'){
+   const c=msg.candidates?.[0];if(c)eventLog(`مرشح آية ${c.surah}:${c.ayah}${msg.stable?' (مستقر)':''}`);
+ }else if(msg.type==='final_sequence'){
+   eventLog('اكتمل التسلسل النهائي للتلاوة.');
+ }
+}
+$('loadBtn').addEventListener('click',async()=>{
+ $('loadBtn').disabled=true;
+ try{
+  say('جارٍ تحميل مكتبة ONNX…');const om=await import('https://esm.sh/onnxruntime-web@1.24.2');ort=om;ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.2/dist/';ort.env.wasm.numThreads=1;
+  const core=await import('https://esm.sh/@tilawa/core@0.4.0?bundle');
+  say('جارٍ تجهيز نموذج Zipformer وبيانات القرآن…');
+  const [model,corpus,quran]=await Promise.all([cached(MODEL,'buffer'),cached(CORPUS,'json'),cached(QURAN,'json')]);
+  session=await core.createRecognitionSession({ort,model:()=>model,corpus:()=>corpus,quran:()=>quran,onEvent:handleEvent});
+  $('startBtn').disabled=false;$('engineState').textContent='المحرك جاهز';say('تم تحميل محرك التلاوة المباشرة. اضغط «بدء التلاوة المباشرة».');
+ }catch(e){console.error(e);say('تعذر تشغيل المحرك:\n'+(e?.message||String(e))+'\n\nتحتاج النسخة إلى هذه الملفات بجانب صفحة HTML:\n1) zipformer_interp_gentle_a05.int8.onnx (حوالي 66 MB)\n2) zipformer_quran.json (حوالي 5.5 MB)\n3) quran.json (اختياري لعرض نص الآيات)\n\nروابط التنزيل الرسمية موجودة في شرح الاستخدام.');$('loadBtn').disabled=false}
+});
+function resample(input,fromRate,toRate){if(fromRate===toRate)return input;const ratio=fromRate/toRate;const len=Math.floor(input.length/ratio);const out=new Float32Array(len);for(let i=0;i<len;i++){const pos=i*ratio;const left=Math.floor(pos),right=Math.min(left+1,input.length-1),frac=pos-left;out[i]=input[left]*(1-frac)+input[right]*frac;}return out;}
+async function feedChunk(chunk){if(!active||!session||!chunk.length)return;queue=queue.then(async()=>{if(!active)return;const events=await session.feed(chunk);if(Array.isArray(events))events.forEach(handleEvent)}).catch(e=>{console.error(e);say('خطأ أثناء معالجة الصوت: '+(e?.message||String(e)));eventLog('خطأ في دفعة صوتية.');});}
+$('startBtn').addEventListener('click',async()=>{
+ try{
+  stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  ctx=new (window.AudioContext||window.webkitAudioContext)();await ctx.resume();source=ctx.createMediaStreamSource(stream);processor=ctx.createScriptProcessor(4096,1,1);silence=ctx.createGain();silence.gain.value=0;
+  let carry=new Float32Array(0);processor.onaudioprocess=e=>{if(!active)return;const mono=e.inputBuffer.getChannelData(0);const sampled=resample(mono,ctx.sampleRate,16000);const merged=new Float32Array(carry.length+sampled.length);merged.set(carry);merged.set(sampled,carry.length);const chunkSize=4800;let offset=0;while(offset+chunkSize<=merged.length){feedChunk(merged.slice(offset,offset+chunkSize));offset+=chunkSize;}carry=merged.slice(offset);};
+  source.connect(processor);processor.connect(silence);silence.connect(ctx.destination);active=true;$('startBtn').disabled=true;$('stopBtn').disabled=false;$('engineState').textContent='يستمع الآن…';$('liveText').textContent='استمع… ابدأ التلاوة بوضوح.';$('events').textContent='';say('التلاوة المباشرة تعمل. اقرأ بوضوح، وسيحاول المحرك تحديث النص تدريجيًا.');
+ }catch(e){console.error(e);say('تعذر فتح الميكروفون: '+(e?.message||String(e))+' — اسمح للمتصفح باستخدام الميكروفون.');}
+});
+$('stopBtn').addEventListener('click',async()=>{
+ active=false;$('stopBtn').disabled=true;$('startBtn').disabled=false;
+ try{if(processor){processor.onaudioprocess=null;processor.disconnect();}source?.disconnect();silence?.disconnect();stream?.getTracks().forEach(t=>t.stop());if(ctx)await ctx.close();await queue;if(session){const final=await session.stop();if(Array.isArray(final))final.forEach(handleEvent);session.reset();}say('توقفت التلاوة. يمكنك بدء جلسة جديدة.');$('engineState').textContent='متوقف';}
+ catch(e){console.error(e);say('توقفت التلاوة، لكن حدث خطأ عند إنهاء الجلسة: '+(e?.message||String(e)));}
+ finally{processor=null;source=null;silence=null;stream=null;ctx=null;}
+});
+window.addEventListener('error',e=>say('خطأ JavaScript: '+e.message));window.addEventListener('unhandledrejection',e=>say('خطأ أثناء التشغيل: '+(e.reason?.message||String(e.reason))));
+</script></body></html>
