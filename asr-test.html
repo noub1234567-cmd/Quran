@@ -361,7 +361,7 @@
   <p class="muted">صفحة اختبار مستقلة، لا علاقة لها بـ index.html. كل شيء يعمل داخل المتصفح.</p>
 
   <section>
-    <button id="btnLoad">١) تحميل النموذج (نحو 131MB)</button>
+    <button id="btnLoad">١) تحميل النموذج (نحو 120MB)</button>
     <progress id="prog" value="0" max="1" hidden></progress>
     <div id="loadInfo" class="stat">لم يُحمَّل بعد. يُحفظ بعد أول مرة فلا يُحمَّل ثانية.</div>
   </section>
@@ -393,7 +393,8 @@
 (function () {
   'use strict';
   const BASE = 'https://huggingface.co/noubou/quran-asr-onnx/resolve/main/';
-  const MODEL_URL = BASE + 'model.int8.onnx';
+  const MODEL_NAME = new URLSearchParams(location.search).get('model') || 'model.mmpc.onnx';
+  const MODEL_URL = BASE + MODEL_NAME;
   const TOKENS_URL = BASE + 'tokens.txt';
   const ORT_BASE = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
   const CACHE_NAME = 'asr-model';
@@ -464,6 +465,7 @@
       const tk = await cachedBytes(TOKENS_URL, () => {});
       tokens = QuranCTC.parseTokens(new TextDecoder().decode(tk));
       log('الرموز: ' + tokens.length);
+      log('النموذج: ' + MODEL_NAME);
       const t0 = performance.now();
       const bytes = await cachedBytes(MODEL_URL, (got, total) => {
         prog.max = total || got; prog.value = got;
