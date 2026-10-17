@@ -139,5 +139,54 @@
     return c;
   }
 
-  return { normalize, words, levenshtein, sim, compare, compareDisplay, refTokens, locate };
+
+  /*
+   * يحذف البسملة من بداية ما سمعه النموذج إذا لم يكن نص الآية المرجعية يبدأ بها
+   * (القارئ يبدأ غالباً بالبسملة قبل أول آية في السورة).
+   */
+  function stripBasmala(hypText, firstAyahText) {
+    const H = words(hypText);
+    const R = words(firstAyahText);
+    const B = ['بسم', 'الله', 'الرحمن', 'الرحيم'];
+    if (R.length >= 2 && sim(R[0], B[0]) >= 0.8 && sim(R[1], B[1]) >= 0.8) return H.join(' ');
+    if (H.length < 4) return H.join(' ');
+    for (let i = 0; i < 4; i++) if (sim(H[i], B[i]) < 0.75) return H.join(' ');
+    return H.slice(4).join(' ');
+  }
+
+  /*
+   * يحدد أي آيات قرأها القارئ فعلاً قرب ما اختاره: يجرب بدايات من (a-back) إلى (a+fwd)
+   * وأطوالاً متدرجة، ويفضّل ما اختاره القارئ إلا إذا كان البديل أفضل بفارق واضح.
+   * ayahs: مصفوفة نصوص آيات السورة (فهرس 0 = آية 1). a..to هو المحدَّد.
+   * يرجع { from, to, score, selScore, changed }.
+   */
+  function detectSpan(hypText, ayahs, a, to, opts) {
+    const back = opts && opts.back != null ? opts.back : 2;
+    const fwd = opts && opts.fwd != null ? opts.fwd : 2;
+    const margin = opts && opts.margin != null ? opts.margin : 0.06;
+    const n = ayahs.length;
+    const hw = words(hypText).length;
+    const limit = Math.ceil(hw * 1.5) + 4; // أطول مرجع نجرّبه (بالكلمات)
+    const sel = compare(ayahs.slice(a - 1, to).join(' '), hypText).score;
+    let best = { from: a, to: to, score: sel };
+    for (let st = Math.max(1, a - back); st <= Math.min(n, a + fwd); st++) {
+      let joined = '', cnt = 0;
+      for (let e = st; e <= n; e++) {
+        if (!ayahs[e - 1]) break;
+        joined += (e > st ? ' ' : '') + ayahs[e - 1];
+        cnt += words(ayahs[e - 1]).length;
+        if (cnt > limit && e > st) break;
+        const sc = compare(joined, hypText).score;
+        const better = sc > best.score + 1e-9 ||
+          (Math.abs(sc - best.score) < 1e-9 && Math.abs(st - a) + Math.abs(e - to) < Math.abs(best.from - a) + Math.abs(best.to - to));
+        if (better) best = { from: st, to: e, score: sc };
+      }
+    }
+    const changed = (best.from !== a || best.to !== to) && best.score >= sel + margin;
+    return changed
+      ? { from: best.from, to: best.to, score: best.score, selScore: sel, changed: true }
+      : { from: a, to: to, score: sel, selScore: sel, changed: false };
+  }
+
+  return { normalize, words, levenshtein, sim, compare, compareDisplay, refTokens, locate, stripBasmala, detectSpan };
 });

@@ -137,10 +137,13 @@
 </div>
 
 <div class="card">
-  <h2>سجّل تلاوتك وقارن (آية بآية)</h2>
+  <h2>سجّل تلاوتك وقارن (آية أو عدة آيات)</h2>
   <div class="row" style="align-items:flex-end">
+    <div><label for="ay">من الآية (السورة المختارة أعلاه)</label><input id="ay" type="number" min="1" value="1" inputmode="numeric"></div>
+    <div><label for="ay2">إلى الآية (اتركها فارغة لآية واحدة)</label><input id="ay2" type="number" min="1" placeholder="اختياري" inputmode="numeric"></div>
+  </div>
+  <div class="row" style="margin-top:8px">
     <button class="alt" id="prevAy">السابقة</button>
-    <div><label for="ay">رقم الآية (من السورة المختارة أعلاه)</label><input id="ay" type="number" min="1" value="1" inputmode="numeric"></div>
     <button class="alt" id="nextAy">التالية</button>
   </div>
   <p class="hint" id="recInfo"></p>
@@ -698,12 +701,20 @@ let recorder=null;
 function curAyah(){
   const s=+$('surah').value,max=COUNTS[s-1];
   const a=Math.min(max,Math.max(1,+$('ay').value||1));
-  $('ay').value=a;return {s,a};
+  $('ay').value=a;
+  let to=a;
+  const v2=+$('ay2').value;
+  if(v2){to=Math.min(max,Math.max(a,v2));$('ay2').value=to;}
+  return {s,a,to};
 }
+const spanTxt=(a,to)=>to>a?`${a}–${to}`:`${a}`;
+const spanWord=(a,to)=>to>a?`الآيات ${spanTxt(a,to)}`:`الآية ${a}`;
 async function refreshRecInfo(){
-  const {s,a}=curAyah();let has=false;
-  try{has=!!(await recGet(keyOf(s,a)));}catch(e){}
-  $('recInfo').textContent=`${NAMES[s-1]} · آية ${a} · ${has?'يوجد تسجيل لك':'لا يوجد تسجيل بعد'}`;
+  const {s,a,to}=curAyah();let rr=null;
+  try{rr=await recGet(keyOf(s,a));}catch(e){}
+  const has=!!rr;
+  const rto=has?Math.max(a,rr.to||a):to;
+  $('recInfo').textContent=`${NAMES[s-1]} · ${spanWord(a,to)} · ${has?'يوجد تسجيل لك'+(rto!==to?' ('+spanWord(a,rto)+')':''):'لا يوجد تسجيل بعد'}`;
   $('mine').disabled=!has;$('cmp').disabled=!has;
   const ao=$('asrOut');if(ao&&ao.dataset.k!==keyOf(s,a))ao.hidden=true;
 }
@@ -714,24 +725,40 @@ async function refreshRecList(){
   if(!all.length){box.innerHTML='<p class="hint">لا توجد تسجيلات بعد.</p>';return;}
   all.forEach(r=>{
     const d=document.createElement('div');d.className='item';
-    d.innerHTML=`<button class="play rplay" data-k="${keyOf(r.s,r.a)}">▶ ${NAMES[r.s-1]} · آية ${r.a}</button><button class="rdel" data-k="${keyOf(r.s,r.a)}">حذف</button>`;
+    d.innerHTML=`<button class="play rplay" data-k="${keyOf(r.s,r.a)}">▶ ${NAMES[r.s-1]} · آية ${spanTxt(r.a,Math.max(r.a,r.to||r.a))}</button><button class="rdel" data-k="${keyOf(r.s,r.a)}">حذف</button>`;
     box.appendChild(d);
   });
 }
 async function playMine(s,a,my){
   let r=null;try{r=await recGet(keyOf(s,a));}catch(e){}
   if(!r)return false;
-  statusEl.textContent=`تلاوتك · ${NAMES[s-1]} آية ${a}`;
+  statusEl.textContent=`تلاوتك · ${NAMES[s-1]} آية ${spanTxt(a,Math.max(a,r.to||a))}`;
   return playBlob(r.blob);
 }
 $('ay').onchange=refreshRecInfo;
-$('prevAy').onclick=()=>{$('ay').value=(+$('ay').value||1)-1;curAyah();refreshRecInfo();};
-$('nextAy').onclick=()=>{$('ay').value=(+$('ay').value||1)+1;curAyah();refreshRecInfo();};
+$('ay2').onchange=refreshRecInfo;
+function shiftAyah(dir){
+  const {a,to}=curAyah(),span=to-a+1,na=Math.max(1,a+dir*span);
+  $('ay').value=na;
+  if($('ay2').value)$('ay2').value=na+span-1;
+  curAyah();refreshRecInfo();
+}
+$('prevAy').onclick=()=>shiftAyah(-1);
+$('nextAy').onclick=()=>shiftAyah(1);
+// تشغيل صوت الشيخ لعدة آيات متتالية
+async function playRange(s,a,to,my){
+  for(let k=a;k<=to;k++){
+    if(my!==token)return false;
+    statusEl.textContent=`الشيخ · ${NAMES[s-1]} آية ${k}`;
+    if(!(await playAyah(s,k)))return false;
+  }
+  return my===token;
+}
 
 $('rec').onclick=async()=>{
   if(recorder&&recorder.state==='recording'){recorder.stop();return;}
   stop();
-  const {s,a}=curAyah();
+  const {s,a,to}=curAyah();
   try{
     const st=await navigator.mediaDevices.getUserMedia({audio:true});
     if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
@@ -743,8 +770,8 @@ $('rec').onclick=async()=>{
       $('rec').textContent='● سجّل';
       const blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});
       try{
-        await recPut(keyOf(s,a),{s,a,blob,t:Date.now()});
-        statusEl.textContent=`تم حفظ تسجيلك للآية ${a}. اضغط «قارن» أو «تسجيلي»`;
+        await recPut(keyOf(s,a),{s,a,to,blob,t:Date.now()});
+        statusEl.textContent=`تم حفظ تسجيلك لـ${spanWord(a,to)}. اضغط «قارن» أو «تسجيلي»`;
         if(asrOn()&&QuranASR.isReady())asrCheck(s,a);
       }catch(e){
         statusEl.textContent='تعذّر حفظ التسجيل';
@@ -752,7 +779,7 @@ $('rec').onclick=async()=>{
       refreshRecInfo();refreshRecList();
     };
     recorder.start();
-    $('rec').textContent='■ إيقاف';statusEl.textContent=`جارٍ التسجيل للآية ${a}... اقرأ الآن`;
+    $('rec').textContent='■ إيقاف';statusEl.textContent=`جارٍ التسجيل لـ${spanWord(a,to)}... اقرأ الآن`;
   }catch(e){
     alert('تعذّر الوصول للميكروفون. اسمح للتطبيق باستخدامه ثم حاول مرة أخرى.');
   }
@@ -777,9 +804,10 @@ async function asrLoadModel(){
 async function asrCheck(s,a){
   const out=$('asrOut');out.hidden=false;out.dataset.k=keyOf(s,a);out.textContent='';
   if(!asrOn()){out.textContent='ميزة التصحيح غير متاحة.';return;}
-  if(!TEXT||!TEXT[s-1]||!TEXT[s-1][a-1]){out.textContent='حمّل نص القرآن أولاً (من تبويب القراءة).';return;}
   let r=null;try{r=await recGet(keyOf(s,a));}catch(e){}
   if(!r){out.textContent='سجّل هذه الآية أولاً.';return;}
+  const to=Math.max(a,r.to||a);
+  for(let k=a;k<=to;k++){if(!TEXT||!TEXT[s-1]||!TEXT[s-1][k-1]){out.textContent='حمّل نص القرآن أولاً (من تبويب القراءة).';return;}}
   if(!QuranASR.isReady()){
     if(await QuranASR.hasCachedModel()){if(!(await asrLoadModel())){out.textContent='تعذّر تجهيز النموذج.';return;}}
     else{out.textContent='حمّل نموذج التصحيح أولاً بزر «تحميل التصحيح الذكي».';return;}
@@ -789,17 +817,27 @@ async function asrCheck(s,a){
   try{
     const res=await QuranASR.transcribe(r.blob);
     if(out.dataset.k!==keyOf(s,a))return;
-    asrRender(out,s,a,res);
+    asrRender(out,s,a,res,to);
   }catch(e){out.textContent='تعذّر التصحيح: '+String((e&&e.message)||e);}
 }
-function asrRender(out,s,a,res){
+function asrRender(out,s,a,res,to){
+  to=Math.max(a,to||a);
   out.textContent='';
   if(!res.text){out.textContent='لم يُسمع كلام واضح. أعد التسجيل في مكان هادئ وبصوت أعلى قليلاً.';return;}
-  const c=QuranMatcher.compareDisplay(TEXT[s-1][a-1],res.text);
+  const hyp=QuranMatcher.stripBasmala(res.text,TEXT[s-1][a-1]);
+  // يتعرّف على الآيات التي قُرئت فعلاً (قرب المحدَّد) حتى لو قرأت أكثر مما اخترت
+  const sp=QuranMatcher.detectSpan(hyp,TEXT[s-1],a,to);
+  const refText=TEXT[s-1].slice(sp.from-1,sp.to).join(' ');
+  const c=QuranMatcher.compareDisplay(refText,hyp);
   const pct=Math.round(c.score*100);
   const head=document.createElement('div');head.className='sc';
   head.textContent='التطابق: '+ar(pct)+'٪ '+(pct>=90?'ممتاز':pct>=70?'جيد':'راجع الآية');
   out.appendChild(head);
+  if(sp.changed){
+    const note=document.createElement('small');
+    note.textContent='تعرّف التطبيق على قراءتك: '+spanWord(sp.from,sp.to)+' (المحدَّد كان '+spanWord(a,to)+')، وصُحّحت عليها.';
+    out.appendChild(note);
+  }
   const q=document.createElement('div');q.className='qw';
   c.words.forEach(w=>{
     if(!w.orig)return;
@@ -824,9 +862,8 @@ if(asrOn()){
   QuranASR.hasCachedModel().then(h=>{if(h){$('asrInfo').textContent='نموذج التصحيح محفوظ في جهازك، وسيُجهَّز عند أول تسجيل.';$('asrLoad').textContent='تفعيل التصحيح الذكي';}}).catch(()=>{});
 }
 $('sheikh').onclick=async()=>{
-  const {s,a}=curAyah();stop();const my=token;
-  statusEl.textContent=`الشيخ · ${NAMES[s-1]} آية ${a}`;
-  const ok=await playAyah(s,a);
+  const {s,a,to}=curAyah();stop();const my=token;
+  const ok=await playRange(s,a,to,my);
   if(my===token)statusEl.textContent=ok?'انتهى':'تعذّر تشغيل الصوت.';
 };
 $('mine').onclick=async()=>{
@@ -835,9 +872,8 @@ $('mine').onclick=async()=>{
   if(my===token)statusEl.textContent='انتهى';
 };
 $('cmp').onclick=async()=>{
-  const {s,a}=curAyah();stop();const my=token;
-  statusEl.textContent=`الشيخ · ${NAMES[s-1]} آية ${a}`;
-  const ok=await playAyah(s,a);
+  const {s,a,to}=curAyah();stop();const my=token;
+  const ok=await playRange(s,a,to,my);
   if(my!==token)return;
   if(!ok){statusEl.textContent='تعذّر تشغيل الصوت.';return;}
   await playMine(s,a,my);
@@ -850,7 +886,7 @@ $('playAll').onclick=async()=>{
   stop();const my=token;
   for(const r of all){
     if(my!==token)return;
-    statusEl.textContent=`تلاوتك · ${NAMES[r.s-1]} آية ${r.a}`;
+    statusEl.textContent=`تلاوتك · ${NAMES[r.s-1]} آية ${spanTxt(r.a,Math.max(r.a,r.to||r.a))}`;
     await playBlob(r.blob);
   }
   if(my===token)statusEl.textContent='انتهت التسجيلات';
@@ -1635,7 +1671,7 @@ $('bkMake').onclick=async()=>{
     const data={};
     BK_KEYS.forEach(k=>{try{const v=localStorage.getItem(k);if(v!=null)data[k]=JSON.parse(v);}catch(e){}});
     const obj={app:'quran-hifz',v:1,t:new Date().toISOString(),data,rec:[]};
-    if($('bkRec').checked){const all=await recAll();for(const r of all)obj.rec.push({s:r.s,a:r.a,t:r.t,type:r.blob.type,d:await blobToB64(r.blob)});}
+    if($('bkRec').checked){const all=await recAll();for(const r of all)obj.rec.push({s:r.s,a:r.a,to:r.to,t:r.t,type:r.blob.type,d:await blobToB64(r.blob)});}
     const name='hifz-backup-'+todayStr()+'.json';
     bkFile=new File([JSON.stringify(obj)],name,{type:'application/json'});
     $('bkOut').hidden=false;
@@ -1665,7 +1701,7 @@ $('bkFile').onchange=async()=>{
     const nr=(obj.rec||[]).length;
     if(!confirm('ستُستبدل بياناتك الحالية (الخطة والمحفوظات والإعدادات'+(nr?' والتسجيلات':'')+') بما في هذا الملف ('+String(obj.t||'').slice(0,10)+'). المتابعة؟'))return;
     Object.keys(obj.data).forEach(k=>{if(BK_KEYS.includes(k))localStorage.setItem(k,JSON.stringify(obj.data[k]));});
-    if(nr){await recClear();for(const r of obj.rec)await recPut(keyOf(r.s,r.a),{s:r.s,a:r.a,t:r.t,blob:b64ToBlob(r.d,r.type)});}
+    if(nr){await recClear();for(const r of obj.rec)await recPut(keyOf(r.s,r.a),{s:r.s,a:r.a,to:r.to,t:r.t,blob:b64ToBlob(r.d,r.type)});}
     alert('تمت الاستعادة. ستُعاد تحميل الصفحة.');
     location.reload();
   }catch(e){alert('تعذّرت الاستعادة: '+(e&&e.message||e));}
