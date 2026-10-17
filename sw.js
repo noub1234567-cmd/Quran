@@ -1,5 +1,5 @@
 // يخزّن صفحات التطبيق ليفتح دون إنترنت (الصوت يُخزَّن من داخل التطبيق بزر «تحميل»)
-const CACHE = 'quran-app-v4';
+const CACHE = 'quran-app-v5';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
