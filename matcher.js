@@ -182,10 +182,12 @@
         if (better) best = { from: st, to: e, score: sc };
       }
     }
-    const changed = (best.from !== a || best.to !== to) && best.score >= sel + margin;
-    return changed
-      ? { from: best.from, to: best.to, score: best.score, selScore: sel, changed: true }
-      : { from: a, to: to, score: sel, selScore: sel, changed: false };
+    let changed = (best.from !== a || best.to !== to) && best.score >= sel + margin;
+    if (!changed) return { from: a, to: to, score: sel, selScore: sel, changed: false };
+    let f = best.from, e = best.to;
+    // grow: لا نُقلّص ما حدّده القارئ؛ نوسّعه فقط ليشمل ما قرأه خارجه (فتظهر الآيات المنسيّة ناقصة)
+    if (opts && opts.grow) { f = Math.min(f, a); e = Math.max(e, to); changed = f !== a || e !== to; }
+    return { from: f, to: e, score: best.score, selScore: sel, changed: changed };
   }
 
   return { normalize, words, levenshtein, sim, compare, compareDisplay, refTokens, locate, stripBasmala, detectSpan };
