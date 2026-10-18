@@ -1997,6 +1997,10 @@ function parseMapChapter(j){
 }
 // يقطّع كلمات ورش (آياته بترقيمه) عند حدود آيات حفص. يرجع {ok,verses} أو {ok:false,why}
 function cutSurah(s,wv,hv,mp){
+  if(s===1&&wv.length){
+    const tk=wordsOfV(wv[0]);
+    if(tk.length>4&&norm(tk[0])==='بسم'&&norm(tk[1])==='الله')wv=[tk.slice(4).join(' ')].concat(wv.slice(1));
+  }
   const nW=wv.length,nH=hv.length;
   if(!mp||mp.length!==nW)return {ok:false,why:'خريطة المطابقة لا توافق عدد آيات ورش'};
   const groups=[];let cur=null;
@@ -2079,13 +2083,17 @@ async function prepareWarshHafs(btn){
     if(btn){btn.disabled=false;btn.textContent=old||'تجهيز ترقيم حفص';}
   }
 }
+const escH=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 function wNumUpdate(){
   const el=$('wNumMsg'),H=RWDATA.warshH;
   if(!H){el.innerHTML='ترقيم حفص (الذي يطابق ملفات الصوت) غير مجهّز. <button class="alt loadWH" style="flex:none;padding:8px 12px">تجهيز ترقيم حفص</button>';return;}
   const sn=+$('wsurah').value||1,bad=H.bad||[];
   let t='ترقيم حفص جاهز: '+(114-bad.length)+' سورة مطابقة'+(bad.length?'، وغير مطابقة: '+bad.slice(0,12).map(x=>NAMES[x-1]).join('، ')+(bad.length>12?' ...':'')+'.':'.');
   if(wcfg.num==='hafs'&&bad.includes(sn))t+=' ⚠ هذه السورة بقيت على ترقيم المجمع، فلا يطابقها الصوت.';
-  el.textContent=t;
+  let html=escH(t);
+  if(bad.length)html+='<details style="margin-top:6px"><summary>تفاصيل السور غير المطابقة</summary>'+bad.map(x=>'<div style="margin-top:4px">'+escH(NAMES[x-1])+' ('+x+'): '+escH((H.why&&H.why[x])||'—')+'</div>').join('')+'</details>';
+  html+=' <button class="alt loadWH" style="flex:none;padding:6px 10px;margin-top:6px">إعادة بناء الترقيم</button>';
+  el.innerHTML=html;
 }
 let wInited=false,wRestored=false;
 async function wInit(){
