@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>اختبار سرعة النموذج الصوتي</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#F5F0E4;color:#1A2B27;padding:16px;line-height:1.6}
+h1{font-size:20px;color:#0B5D52;margin:0 0 12px}
+.card{background:#FFFCF5;border:1px solid #E2D7BE;border-radius:14px;padding:14px;margin-bottom:12px}
+button{height:48px;border:0;border-radius:12px;background:#0B5D52;color:#fff;font-size:16px;font-weight:700;padding:0 18px;margin:4px 4px 4px 0}
+button:disabled{opacity:.45}
+button.alt{background:#DCEBE5;color:#0B5D52}
+pre{white-space:pre-wrap;word-break:break-word;font-size:13px;background:#fff;border:1px solid #E2D7BE;border-radius:10px;padding:10px;margin:8px 0 0;direction:ltr;text-align:left}
+#live{font-size:20px;min-height:32px;direction:rtl}
+.bar{height:10px;background:#DCEBE5;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:#0B5D52}
+</style></head><body>
+<h1>اختبار سرعة النموذج الصوتي</h1>
+<div class="card">
+<div id="st">اضغط «حمّل النموذج» (نحو 73 ميغابايت، مرة واحدة).</div>
+<div class="bar"><i id="pb"></i></div>
+<button id="load">١) حمّل النموذج</button>
+<button id="syn" class="alt" disabled>٢) اختبار بلا ميكروفون</button>
+<button id="mic" class="alt" disabled>٣) اختبار بالميكروفون</button>
+</div>
+<div class="card"><div>النص الصوتي المسموع:</div><div id="live">—</div></div>
+<div class="card"><div>النتيجة (انسخها وأرسلها لي):</div><pre id="out">لم يبدأ الاختبار بعد.</pre></div>
+<script>
+var PH_TOKENS="<blank> 250\nؙ 0\nء 1\nا 2\nب 3\nت 4\nث 5\nج 6\nح 7\nخ 8\nد 9\nذ 10\nر 11\nز 12\nس 13\nش 14\nص 15\nض 16\nط 17\nظ 18\nع 19\nغ 20\nـ 21\nف 22\nق 23\nك 24\nل 25\nم 26\nن 27\nه 28\nو 29\nي 30\nَ 31\nُ 32\nِ 33\nٲ 34\nڇ 35\nں 36\nۜ 37\nۥ 38\nۦ 39\n۪ 40\n۾ 41\nءَ 42\nءُ 43\nءِ 44\nاا 45\nبَ 46\nبُ 47\nبِ 48\nبڇ 49\nتت 50\nتَ 51\nتُ 52\nتِ 53\nثَ 54\nثُ 55\nثِ 56\nجَ 57\nجُ 58\nجِ 59\nجڇ 60\nحح 61\nحَ 62\nحُ 63\nحِ 64\nخَ 65\nخُ 66\nخِ 67\nدَ 68\nدُ 69\nدِ 70\nدڇ 71\nذَ 72\nذُ 73\nذِ 74\nرر 75\nرَ 76\nرُ 77\nرِ 78\nر۪ 79\nزَ 80\nزُ 81\nزِ 82\nسس 83\nسَ 84\nسُ 85\nسِ 86\nشَ 87\nشُ 88\nشِ 89\nصَ 90\nصُ 91\nصِ 92\nضَ 93\nضُ 94\nضِ 95\nطَ 96\nطُ 97\nطِ 98\nطڇ 99\nظَ 100\nظُ 101\nظِ 102\nعَ 103\nعُ 104\nعِ 105\nغَ 106\nغُ 107\nغِ 108\nــ 109\nفف 110\nفَ 111\nفُ 112\nفِ 113\nقَ 114\nقُ 115\nقِ 116\nقڇ 117\nكك 118\nكَ 119\nكُ 120\nكِ 121\nلل 122\nلَ 123\nلُ 124\nلِ 125\nلۜ 126\nمَ 127\nمُ 128\nمِ 129\nنؙ 130\nنَ 131\nنُ 132\nنِ 133\nنۜ 134\nهَ 135\nهُ 136\nهِ 137\nوو 138\nوَ 139\nوُ 140\nوِ 141\nيي 142\nيَ 143\nيُ 144\nيِ 145\nۥۥ 146\nۦۦ 147\nااۜ 148\nببَ 149\nببُ 150\nببِ 151\nببڇ 152\nتتَ 153\nتتُ 154\nتتِ 155\nثثَ 156\nثثُ 157\nثثِ 158\nججَ 159\nججُ 160\nججِ 161\nججڇ 162\nححَ 163\nححِ 164\nخخَ 165\nخخِ 166\nددَ 167\nددُ 168\nددِ 169\nددڇ 170\nذذَ 171\nذذُ 172\nذذِ 173\nررَ 174\nررُ 175\nررِ 176\nززَ 177\nززُ 178\nززِ 179\nسسَ 180\nسسُ 181\nسسِ 182\nششَ 183\nششُ 184\nششِ 185\nصصَ 186\nصصُ 187\nصصِ 188\nضضَ 189\nضضُ 190\nضضِ 191\nططَ 192\nططُ 193\nططِ 194\nظظَ 195\nظظُ 196\nظظِ 197\nععَ 198\nععُ 199\nععِ 200\nففَ 201\nففُ 202\nففِ 203\nققَ 204\nققُ 205\nققِ 206\nققڇ 207\nككَ 208\nككُ 209\nككِ 210\nللَ 211\nللُ 212\nللِ 213\nممم 214\nننن 215\nههَ 216\nههُ 217\nههِ 218\nووو 219\nووَ 220\nووُ 221\nووِ 222\nييي 223\nييَ 224\nييُ 225\nييِ 226\nںںں 227\n۾۾۾ 228\nاااا 229\nوووَ 230\nوووُ 231\nوووِ 232\nيييَ 233\nيييُ 234\nۥۥۥۥ 235\nۦۦۦۦ 236\nااااا 237\nممممَ 238\nممممُ 239\nممممِ 240\nننننَ 241\nننننُ 242\nننننِ 243\nييييي 244\nۥۥۥۥۥ 245\nۦۦۦۦۦ 246\nاااااا 247\nۥۥۥۥۥۥ 248\nۦۦۦۦۦۦ 249\n";
+var MODEL_URL='https://huggingface.co/noubou/quran-asr-onnx/resolve/main/quran_phoneme_zipformer.int8.onnx';
+var Module={locateFile:function(p,d){return (d||'')+p;},printErr:function(t){log('wasm: '+t)},onAbort:function(w){log('ABORT '+w)}};
+var wasmReady=false;Module.onRuntimeInitialized=function(){wasmReady=true;log('wasm جاهز')};
+var $=function(i){return document.getElementById(i)};
+var logs=[];function log(s){logs.push(s);$('out').textContent=logs.slice(-14).join('\n');}
+function st(s){$('st').textContent=s}
+var rec=null,stream=null,loadMs=0,initMs=0;
+</script>
+<script src="sherpa-onnx-asr.js"></script>
+<script src="sherpa-onnx-wasm-main-asr.js"></script>
+<script>
+function waitWasm(){return new Promise(function(res,rej){var t=0;(function w(){if(wasmReady)return res();if(++t>600)return rej(new Error('تعذّر تحميل wasm'));setTimeout(w,100)})()})}
+async function fetchModel(){
+  var cache=null;try{cache=await caches.open('phoneme-model')}catch(e){}
+  if(cache){var m=await cache.match(MODEL_URL);if(m){log('من الذاكرة المؤقتة');return new Uint8Array(await m.arrayBuffer())}}
+  var r=await fetch(MODEL_URL);if(!r.ok)throw new Error('HTTP '+r.status);
+  var total=+r.headers.get('content-length')||72705392,got=0,parts=[],rd=r.body.getReader();
+  for(;;){var x=await rd.read();if(x.done)break;parts.push(x.value);got+=x.value.length;$('pb').style.width=Math.min(100,got/total*100)+'%';st('تنزيل '+(got/1048576).toFixed(1)+' م.ب')}
+  var all=new Uint8Array(got),o=0;parts.forEach(function(p){all.set(p,o);o+=p.length});
+  if(cache){try{await cache.put(MODEL_URL,new Response(all.slice(0)))}catch(e){}}
+  return all;
+}
+$('load').onclick=async function(){
+  $('load').disabled=true;
+  try{
+    st('تحميل المحرّك…');await waitWasm();
+    var t0=performance.now();var bytes=await fetchModel();loadMs=performance.now()-t0;
+    st('تهيئة النموذج… (قد تستغرق عدة ثوانٍ)');await new Promise(function(r){setTimeout(r,50)});
+    Module.FS_createDataFile('/','model.onnx',bytes,true,true,true);Module.FS_createDataFile('/','tokens.txt',new TextEncoder().encode(PH_TOKENS),true,true,true);
+    Module.modelPath='/model.onnx';Module.tokensPath='/tokens.txt';
+    var t1=performance.now();rec=createOnlineRecognizer(Module);initMs=performance.now()-t1;
+    if(!rec||!rec.handle)throw new Error('فشل إنشاء المُتعرّف');
+    try{Module.FS_unlink('/model.onnx')}catch(e){}
+    st('النموذج جاهز ✓');log('تحميل '+(loadMs/1000).toFixed(1)+'ث، تهيئة '+(initMs/1000).toFixed(1)+'ث');
+    $('syn').disabled=false;$('mic').disabled=false;
+  }catch(e){var m=(e&&e.message)||('رمز خطأ '+e);st('خطأ: '+m);log('ERR '+m);$('load').disabled=false}
+};
+function pct(a,p){a=a.slice().sort(function(x,y){return x-y});return a.length?a[Math.min(a.length-1,Math.floor(a.length*p))]:0}
+function report(kind,audioSec,times,res){
+  var tot=times.reduce(function(a,b){return a+b},0);
+  var rtf=tot/1000/audioSec;
+  var s=['== '+kind+' ==','الجهاز: '+navigator.userAgent,'مدة الصوت: '+audioSec.toFixed(1)+' ث','زمن التحليل الكلي: '+(tot/1000).toFixed(2)+' ث',
+  'RTF = '+rtf.toFixed(2)+' (أقل من 1 = أسرع من الزمن الحقيقي)','أبطأ دفعة: '+Math.max.apply(null,times).toFixed(0)+' مللي ثانية، ص95: '+pct(times,.95).toFixed(0),
+  'تحميل النموذج: '+(loadMs/1000).toFixed(1)+' ث، تهيئة: '+(initMs/1000).toFixed(1)+' ث','مفاتيح النتيجة: '+(res?Object.keys(res).join(','):'-'),
+  'النص: '+(res&&res.text||'')];
+  logs=s;$('out').textContent=s.join('\n');
+}
+async function run(samplesFn,seconds,kind,live){
+  var s=rec.createStream(),times=[],CH=5120,res=null,n=0;
+  for(var i=0;i<seconds*16000;i+=CH){
+    var ch=samplesFn(i,CH);var t=performance.now();
+    s.acceptWaveform(16000,ch);while(rec.isReady(s))rec.decode(s);
+    times.push(performance.now()-t);res=rec.getResult(s);if(res.text)$('live').textContent=res.text;
+    await new Promise(function(r){setTimeout(r,0)});
+  }
+  s.free();report(kind,seconds,times,res);
+}
+$('syn').onclick=function(){
+  $('syn').disabled=true;st('اختبار 12 ثانية صوتاً اصطناعياً…');
+  var f=function(off,n){var a=new Float32Array(n);for(var i=0;i<n;i++){var t=(off+i)/16000;a[i]=0.12*Math.sin(2*Math.PI*(180+60*Math.sin(t*3))*t)*(0.5+0.5*Math.sin(t*5))+0.01*(Math.random()-.5)}return a};
+  run(f,12,'اختبار اصطناعي').then(function(){st('انتهى ✓');$('syn').disabled=false});
+};
+$('mic').onclick=async function(){
+  if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null;$('mic').textContent='٣) اختبار بالميكروفون';return}
+  try{
+    var ms=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    stream=ms;$('mic').textContent='إيقاف';st('اقرأ الآن… اضغط «إيقاف» عند الانتهاء');
+    var ac=new (window.AudioContext||window.webkitAudioContext)();var src=ac.createMediaStreamSource(ms);
+    var sp=ac.createScriptProcessor(4096,1,1),ratio=ac.sampleRate/16000,buf=[],times=[],audio=0,s=rec.createStream(),res=null;
+    sp.onaudioprocess=function(e){
+      if(!stream)return;var inp=e.inputBuffer.getChannelData(0),n=Math.floor(inp.length/ratio),o=new Float32Array(n);
+      for(var i=0;i<n;i++){var a=Math.floor(i*ratio),b=Math.min(inp.length,Math.floor((i+1)*ratio)),sum=0;for(var j=a;j<b;j++)sum+=inp[j];o[i]=sum/Math.max(1,b-a)}
+      var t=performance.now();s.acceptWaveform(16000,o);while(rec.isReady(s))rec.decode(s);times.push(performance.now()-t);audio+=n/16000;
+      res=rec.getResult(s);if(res.text)$('live').textContent=res.text;
+    };
+    src.connect(sp);sp.connect(ac.destination);
+    var stopCheck=setInterval(function(){if(!stream){clearInterval(stopCheck);try{sp.disconnect();src.disconnect();ac.close()}catch(e){};report('ميكروفون حي',audio,times,res);s.free();st('انتهى ✓')}},200);
+  }catch(e){st('الميكروفون: '+e.message)}
+};
+</script></body></html>
