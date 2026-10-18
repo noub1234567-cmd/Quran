@@ -13,7 +13,9 @@ jobs:
           unzip -q /tmp/natlu.zip -d /tmp/natlu
           rm -rf recite
           cp -r /tmp/natlu/*/landing_page/recite recite
-          printf 'x' > recite/sherpa-onnx-wasm-main-asr.data
+          cp /tmp/natlu/*/web/sherpa-onnx-wasm-main-asr.js recite/
+          cp /tmp/natlu/*/web/sherpa-onnx-wasm-main-asr.wasm recite/
+          cp /tmp/natlu/*/web/audio_worklet.js recite/
           python3 - <<'E'
           import os
           r = os.environ['GITHUB_REPOSITORY'].split('/')[1]
@@ -35,7 +37,7 @@ jobs:
               (r"/^\/recite\//", r"/^\/%s\/recite\//" % r),
               ('keys.filter((k) => k !== CACHE_NAME)',
                "keys.filter((k) => k.startsWith('recite-quran-pwa-') && k !== CACHE_NAME)"),
-              ("recite-quran-pwa-v18-1792016698", "recite-quran-pwa-v18-gh5"),
+              ("recite-quran-pwa-v18-1792016698", "recite-quran-pwa-v18-gh6"),
               ("if (url.pathname.includes('/download-model')) return;",
                "if (url.pathname.includes('/download-model') || url.pathname.endsWith('.onnx')) return;"),
           ])
@@ -54,6 +56,6 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email actions@github.com
-          git add recite
+          git add -A recite
           git commit -m "add recite" || echo "nothing to commit"
           git push
