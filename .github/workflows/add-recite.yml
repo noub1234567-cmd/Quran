@@ -33,6 +33,17 @@ jobs:
               (r"/^\/recite\//", r"/^\/%s\/recite\//" % r),
               ('keys.filter((k) => k !== CACHE_NAME)',
                "keys.filter((k) => k.startsWith('recite-quran-pwa-') && k !== CACHE_NAME)"),
+              ("recite-quran-pwa-v18-1792016698", "recite-quran-pwa-v18-gh2"),
+              ("if (url.pathname.includes('/download-model')) return;",
+               "if (url.pathname.includes('/download-model') || url.pathname.endsWith('.onnx')) return;"),
+          ])
+          patch('recite/sherpa_official_app.js', [
+              ("const url = '/download-model?model=' + filename;",
+               "const url = new URL('assets/assets/model/' + filename, document.baseURI).href;"),
+              ("window.fetchSherpaModel = async function(url) {",
+               "window.fetchSherpaModel = async function(url) {\n  url = new URL('assets/assets/model/quran_phoneme_zipformer.int8.onnx', document.baseURI).href;"),
+              ("supportsRanges = headRes.headers.get('accept-ranges') === 'bytes';",
+               "supportsRanges = false;"),
           ])
           E
       - name: Commit
