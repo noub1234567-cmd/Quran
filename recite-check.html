@@ -1,0 +1,19 @@
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width">
+<title>check</title>
+<pre id=o style="white-space:pre-wrap;font:14px monospace;direction:ltr"></pre>
+<script>
+const o=document.getElementById('o');const p=t=>{o.textContent+=t+'\n'};
+const base=location.pathname.replace(/[^\/]*$/,'')+'recite/';
+(async()=>{
+p('isolated: '+self.crossOriginIsolated+' secure: '+isSecureContext);
+try{const rs=await navigator.serviceWorker.getRegistrations();p('SW: '+(rs.map(r=>r.scope+' '+(r.active?r.active.state:'-')).join(' | ')||'none'))}catch(e){p('SW err '+e)}
+try{p('caches: '+(await caches.keys()).join(', '))}catch(e){p('caches err '+e)}
+try{const d=await indexedDB.databases();p('idb: '+d.map(x=>x.name).join(', '))}catch(e){p('idb err '+e)}
+try{const m=await navigator.permissions.query({name:'microphone'});p('mic: '+m.state)}catch(e){p('mic perm err')}
+const files=['assets/assets/model/quran_phoneme_zipformer.int8.onnx','assets/assets/model/tokens.txt','sherpa-onnx-wasm-main-asr.wasm','sherpa-onnx-wasm-main-asr.js','sherpa-onnx-asr.js','audio_worklet.js','main.dart.js'];
+for(const f of files){try{const r=await fetch(base+f,{method:'HEAD',cache:'no-store'});p(f+' -> '+r.status+' '+r.headers.get('content-length'))}catch(e){p(f+' ERR '+e)}}
+try{const s=await (await fetch(base+'sherpa_official_app.js',{cache:'no-store'})).text();p('patched js: '+s.includes('baseURI'))}catch(e){p('js err')}
+try{const s=await (await fetch(base+'sw.js',{cache:'no-store'})).text();p('sw gh2: '+s.includes('gh2'))}catch(e){p('sw err')}
+p('done');
+})();
+</script>
