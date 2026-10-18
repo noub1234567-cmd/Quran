@@ -1,1 +1,44 @@
-
+name: add-recite
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch and patch Natlu
+        run: |
+          curl -L --fail -o /tmp/natlu.zip "https://huggingface.co/noubou/Natlu/resolve/main/Recite-Quran-Natlu-2d443d2.zip"
+          unzip -q /tmp/natlu.zip -d /tmp/natlu
+          rm -rf recite
+          cp -r /tmp/natlu/*/landing_page/recite recite
+          python3 - <<'E'
+          import os
+          r = os.environ['GITHUB_REPOSITORY'].split('/')[1]
+          def patch(path, pairs):
+              s = open(path, encoding='utf-8').read()
+              for a, b in pairs:
+                  assert a in s, (path, a)
+                  s = s.replace(a, b)
+              open(path, 'w', encoding='utf-8').write(s)
+          patch('recite/index.html', [
+              ('<base href="/recite/">', '<base href="/%s/recite/">' % r),
+              ('for (const reg of regs) await reg.unregister();',
+               "for (const reg of regs) if (reg.scope.includes('/recite/')) await reg.unregister();"),
+              ('for (const k of keys) await caches.delete(k);',
+               "for (const k of keys) if (k.startsWith('recite-quran-pwa-')) await caches.delete(k);"),
+          ])
+          patch('recite/sw.js', [
+              (r"/^\/recite\//", r"/^\/%s\/recite\//" % r),
+              ('keys.filter((k) => k !== CACHE_NAME)',
+               "keys.filter((k) => k.startsWith('recite-quran-pwa-') && k !== CACHE_NAME)"),
+          ])
+          E
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git add recite
+          git commit -m "add recite" || echo "nothing to commit"
+          git push
