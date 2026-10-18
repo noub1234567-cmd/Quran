@@ -22,8 +22,9 @@ jobs:
                   assert a in s, (path, a)
                   s = s.replace(a, b)
               open(path, 'w', encoding='utf-8').write(s)
+          dbg = '<script>if(/[?&]debug/.test(location.search)){var s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/eruda@3.0.1";s.onload=function(){eruda.init()};document.head.appendChild(s)}</script>'
           patch('recite/index.html', [
-              ('<base href="/recite/">', '<base href="/%s/recite/">' % r),
+              ('<base href="/recite/">', '<base href="/%s/recite/">' % r + dbg),
               ('for (const reg of regs) await reg.unregister();',
                "for (const reg of regs) if (reg.scope.includes('/recite/')) await reg.unregister();"),
               ('for (const k of keys) await caches.delete(k);',
@@ -33,7 +34,7 @@ jobs:
               (r"/^\/recite\//", r"/^\/%s\/recite\//" % r),
               ('keys.filter((k) => k !== CACHE_NAME)',
                "keys.filter((k) => k.startsWith('recite-quran-pwa-') && k !== CACHE_NAME)"),
-              ("recite-quran-pwa-v18-1792016698", "recite-quran-pwa-v18-gh2"),
+              ("recite-quran-pwa-v18-1792016698", "recite-quran-pwa-v18-gh3"),
               ("if (url.pathname.includes('/download-model')) return;",
                "if (url.pathname.includes('/download-model') || url.pathname.endsWith('.onnx')) return;"),
           ])
