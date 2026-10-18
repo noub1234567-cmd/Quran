@@ -1,7 +1,7 @@
 // Service Worker for Recite Quran (اتلو القران)
 // Provides complete offline caching, dynamic caching, and Cross-Origin Isolation (COOP/COEP) for WebAssembly.
 
-const CACHE_NAME = 'recite-quran-pwa-v18-1792016698';
+const CACHE_NAME = 'recite-quran-pwa-v18-gh2';
 
 const STATIC_PRECACHE = [
   './',
@@ -94,7 +94,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Model download endpoint is saved directly to IndexedDB
-  if (url.pathname.includes('/download-model')) return;
+  if (url.pathname.includes('/download-model') || url.pathname.endsWith('.onnx')) return;
 
   // Stream MP3Quran audio directly through browser native HTTP range request pipeline
   if (url.hostname.includes('mp3quran.net')) return;

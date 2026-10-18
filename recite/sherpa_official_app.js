@@ -337,7 +337,7 @@ async function cacheModel(url, buffer) {
 window.isSherpaModelCached = async function(modelFilename) {
   try {
     const filename = modelFilename || 'zipformer_p_arabic_v3.int8.onnx';
-    const url = '/download-model?model=' + filename;
+    const url = new URL('assets/assets/model/' + filename, document.baseURI).href;
     const cached = await getCachedModel(url);
     return Boolean(cached && cached.byteLength > 50000000);
   } catch (_) {
@@ -349,6 +349,7 @@ window.isSherpaModelCached = async function(modelFilename) {
 let activeModelDownloadPromise = null;
 
 window.fetchSherpaModel = async function(url) {
+  url = new URL('assets/assets/model/quran_phoneme_zipformer.int8.onnx', document.baseURI).href;
   if (activeModelDownloadPromise) return activeModelDownloadPromise;
 
   activeModelDownloadPromise = (async () => {
@@ -365,7 +366,7 @@ window.fetchSherpaModel = async function(url) {
         const headRes = await fetch(url, { method: 'HEAD' });
         const len = headRes.headers.get('content-length');
         if (len) totalSize = parseInt(len, 10);
-        supportsRanges = headRes.headers.get('accept-ranges') === 'bytes';
+        supportsRanges = false;
       } catch (_) {}
 
       let arrayBuffer;
