@@ -344,6 +344,12 @@ function createOnlineRecognizer(Module, myConfig) {
     ruleFars: '',
   };
 
+    recognizerConfig.modelConfig = recognizerConfig.modelConfig || {};
+  recognizerConfig.modelConfig.zipformer2Ctc =
+    recognizerConfig.modelConfig.zipformer2Ctc || {};
+  recognizerConfig.modelConfig.zipformer2Ctc.model = modelPath;
+  recognizerConfig.modelConfig.tokens = tokensPath;
+
   return new OnlineRecognizer(recognizerConfig, Module);
 }
 
