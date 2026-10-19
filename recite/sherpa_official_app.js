@@ -68,7 +68,7 @@ window.writeSherpaAssetToVFS = function(filename, bytes) {
 
 // Initialize the Sherpa OnlineRecognizer
 window.initSherpaRecognizer = function(modelFilename, tokensFilename) {
-  const cleanM = (modelFilename || 'quran_phoneme_zipformer.int8.onnx').replace(/^(\.\/|\/)/, '');
+  const cleanM = (modelFilename || 'zipformer_p_arabic_v3.int8.onnx').replace(/^(\.\/|\/)/, '');
   const cleanT = (tokensFilename || 'quran_tokens.txt').replace(/^(\.\/|\/)/, '');
 
   const fullM = '/' + cleanM;
@@ -349,7 +349,7 @@ window.isSherpaModelCached = async function(modelFilename) {
 let activeModelDownloadPromise = null;
 
 window.fetchSherpaModel = async function(url) {
-  url = new URL('assets/assets/model/quran_phoneme_zipformer.int8.onnx', document.baseURI).href;
+  url = new URL('assets/assets/model/zipformer_p_arabic_v3.int8.onnx', document.baseURI).href;
   if (activeModelDownloadPromise) return activeModelDownloadPromise;
 
   activeModelDownloadPromise = (async () => {

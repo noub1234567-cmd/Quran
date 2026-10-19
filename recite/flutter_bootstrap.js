@@ -234,9 +234,5 @@ addEventListener("message", eventListener);
   window._flutter.loader || (window._flutter.loader = new b());
 })();
 var _flutter = window._flutter = window._flutter || {};
-_flutter.buildConfig = { "useLocalCanvasKit": true, "engineRevision": "4c525dac5ebe5971c5708ef73558ed8edcf4a362", "builds": [{ "compileTarget": "dart2wasm", "renderer": "skwasm", "mainWasmPath": "main.dart.wasm", "jsSupportRuntimePath": "main.dart.mjs" }, { "compileTarget": "dart2js", "renderer": "canvaskit", "mainJsPath": "main.dart.js" }] };
-_flutter.loader.load({
-  config: {
-    canvasKitBaseUrl: "canvaskit/"
-  }
-});
+_flutter.buildConfig = { "engineRevision": "0cd610717bde95fd88343c64f81c11ba4e5c0010", "useLocalCanvasKit": true, "builds": [{ "compileTarget": "dart2js", "renderer": "canvaskit", "mainJsPath": "main.dart.js" }, {}], "useLocalCanvasKit": true };
+_flutter.loader.load({ config: { canvasKitBaseUrl: "canvaskit/" } });
