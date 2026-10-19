@@ -311,9 +311,7 @@ class OnlineRecognizer {
 
 function createOnlineRecognizer(Module, myConfig) {
   const modelPath = '/zipformer_p_arabic_v3.int8.onnx';
-  const tokensPath = (Module && Module.tokensPath)
-    ? Module.tokensPath
-    : '/quran_tokens.txt';
+  const tokensPath = (Module && Module.tokensPath) ? Module.tokensPath : '/quran_tokens.txt';
 
   const recognizerConfig = myConfig || {
     featConfig: { sampleRate: 16000, featureDim: 80 },
@@ -344,9 +342,8 @@ function createOnlineRecognizer(Module, myConfig) {
     ruleFars: '',
   };
 
-    recognizerConfig.modelConfig = recognizerConfig.modelConfig || {};
-  recognizerConfig.modelConfig.zipformer2Ctc =
-    recognizerConfig.modelConfig.zipformer2Ctc || {};
+  recognizerConfig.modelConfig = recognizerConfig.modelConfig || {};
+  recognizerConfig.modelConfig.zipformer2Ctc = recognizerConfig.modelConfig.zipformer2Ctc || {};
   recognizerConfig.modelConfig.zipformer2Ctc.model = modelPath;
   recognizerConfig.modelConfig.tokens = tokensPath;
 
