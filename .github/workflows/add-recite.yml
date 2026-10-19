@@ -1,61 +1,226 @@
 name: add-recite
-on: workflow_dispatch
+
+on:
+  workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   add:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch and patch Natlu
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up the Flutter version used by the audited source
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          cache: true
+
+      - name: Fetch Natlu source and apply the audited memorization changes
+        shell: bash
         run: |
-          curl -L --fail -o /tmp/natlu.zip "https://huggingface.co/noubou/Natlu/resolve/main/Recite-Quran-Natlu-2d443d2.zip"
+          set -euo pipefail
+          rm -rf /tmp/natlu
+          mkdir -p /tmp/natlu
+          curl -L --fail --retry 3 --retry-delay 2 \
+            -o /tmp/natlu.zip \
+            "https://huggingface.co/noubou/Natlu/resolve/main/Recite-Quran-Natlu-2d443d2.zip"
           unzip -q /tmp/natlu.zip -d /tmp/natlu
-          rm -rf recite
-          cp -r /tmp/natlu/*/landing_page/recite recite
-          cp /tmp/natlu/*/web/sherpa-onnx-wasm-main-asr.js recite/
-          cp /tmp/natlu/*/web/sherpa-onnx-wasm-main-asr.wasm recite/
-          cp /tmp/natlu/*/web/audio_worklet.js recite/
-          python3 - <<'E'
-          import os
-          r = os.environ['GITHUB_REPOSITORY'].split('/')[1]
-          def patch(path, pairs):
-              s = open(path, encoding='utf-8').read()
-              for a, b in pairs:
-                  assert a in s, (path, a)
-                  s = s.replace(a, b)
-              open(path, 'w', encoding='utf-8').write(s)
-          dbg = '<script>if(/[?&]debug/.test(location.search)){document.write("<script src=\\"https://cdn.jsdelivr.net/npm/eruda@3.0.1\\"><\\/script><script>eruda.init()<\\/script>")}</script>'
-          patch('recite/index.html', [
-              ('<base href="/recite/">', '<base href="/%s/recite/">' % r + dbg),
-              ('for (const reg of regs) await reg.unregister();',
-               "for (const reg of regs) if (reg.scope.includes('/recite/')) await reg.unregister();"),
-              ('for (const k of keys) await caches.delete(k);',
-               "for (const k of keys) if (k.startsWith('recite-quran-pwa-')) await caches.delete(k);"),
-          ])
-          patch('recite/sw.js', [
-              (r"/^\/recite\//", r"/^\/%s\/recite\//" % r),
-              ('keys.filter((k) => k !== CACHE_NAME)',
-               "keys.filter((k) => k.startsWith('recite-quran-pwa-') && k !== CACHE_NAME)"),
-              ("recite-quran-pwa-v18-1792016698", "recite-quran-pwa-v18-gh6"),
-              ("if (url.pathname.includes('/download-model')) return;",
-               "if (url.pathname.includes('/download-model') || url.pathname.endsWith('.onnx')) return;"),
-          ])
-          patch('recite/sherpa_official_app.js', [
-              ("const cleanM = (modelFilename || 'zipformer_p_arabic_v3.int8.onnx')",
-               "const cleanM = (modelFilename || 'quran_phoneme_zipformer.int8.onnx')"),
-              ("const url = '/download-model?model=' + filename;",
-               "const url = new URL('assets/assets/model/' + filename, document.baseURI).href;"),
-              ("window.fetchSherpaModel = async function(url) {",
-               "window.fetchSherpaModel = async function(url) {\n  url = new URL('assets/assets/model/quran_phoneme_zipformer.int8.onnx', document.baseURI).href;"),
-              ("supportsRanges = headRes.headers.get('accept-ranges') === 'bytes';",
-               "supportsRanges = false;"),
-          ])
-          E
-      - name: Commit
+          PUBSPEC="$(find /tmp/natlu -type f -name pubspec.yaml -print -quit)"
+          test -n "$PUBSPEC" || { echo 'ERROR: pubspec.yaml was not found in the Natlu archive.'; exit 1; }
+          SRC_DIR="$(dirname "$PUBSPEC")"
+          grep -qE '^version:[[:space:]]*1\.1\.0\+19$' "$SRC_DIR/pubspec.yaml" || {
+            echo 'ERROR: unexpected Natlu source version; expected 1.1.0+19.'; exit 1;
+          }
+          cd "$SRC_DIR"
+          patch --batch --forward --fuzz=0 -p1 < "$GITHUB_WORKSPACE/.github/natlu-repeat-overrides.patch"
+          for f in \
+            lib/main.dart \
+            lib/ui/tracking_screen.dart \
+            lib/ui/repeat_memorization_screen.dart \
+            lib/services/audio/verse_audio_player.dart \
+            lib/services/quran_audio_service.dart \
+            web/index.html \
+            web/sw.js \
+            web/sherpa_official_app.js \
+            web/sherpa-onnx-asr.js \
+            web/sherpa-onnx-wasm-main-asr.js \
+            web/sherpa-onnx-wasm-main-asr.wasm \
+            web/audio_worklet.js \
+            assets/data/mushaf_pages.json; do
+            test -s "$f" || { echo "ERROR: required source file is missing or empty: $f"; exit 1; }
+          done
+          echo "NATLU_SRC_DIR=$SRC_DIR" >> "$GITHUB_ENV"
+
+      - name: Download and verify the exact APK model
+        shell: bash
         run: |
+          set -euo pipefail
+          MODEL="$NATLU_SRC_DIR/assets/model/zipformer_p_arabic_v3.int8.onnx"
+          mkdir -p "$(dirname "$MODEL")"
+          curl -L --fail --retry 3 --retry-delay 2 \
+            -o "$MODEL" \
+            "https://github.com/Recite-Quran/Natlu/releases/download/models-latest/zipformer_p_arabic_v3.int8.onnx"
+          echo "6a5ddafa9c5e5c01260d30264031b341785bdc152e9ef1d569b41c8c278508eb  $MODEL" | sha256sum --check --status || {
+            echo 'ERROR: ONNX model SHA-256 does not match the model inside the supplied APK.'; exit 1;
+          }
+          test "$(stat -c '%s' "$MODEL")" = '72705392' || {
+            echo 'ERROR: ONNX model size does not match the audited APK model.'; exit 1;
+          }
+
+      - name: Build the web app from source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$NATLU_SRC_DIR"
+          flutter pub get
+          flutter build web --release --base-href "/recite/" --pwa-strategy=none --no-web-resources-cdn
+          MODEL="build/web/assets/assets/model/zipformer_p_arabic_v3.int8.onnx"
+          test -s "$MODEL" || { echo 'ERROR: Flutter did not package the ONNX model.'; exit 1; }
+          echo "6a5ddafa9c5e5c01260d30264031b341785bdc152e9ef1d569b41c8c278508eb  $MODEL" | sha256sum --check --status || {
+            echo 'ERROR: model changed or was not packaged intact by Flutter.'; exit 1;
+          }
+          test -s build/web/assets/packages/recite_quran/assets/model/tokens.txt || {
+            echo 'ERROR: recite_quran tokens.txt asset is missing from the web build.'; exit 1;
+          }
+          test -s build/web/assets/packages/recite_quran/assets/model/ordered_quran_phonemes.json || {
+            echo 'ERROR: ordered_quran_phonemes.json asset is missing from the web build.'; exit 1;
+          }
+          test -s build/web/sherpa-onnx-wasm-main-asr.js || {
+            echo 'ERROR: Sherpa WASM JavaScript is missing from the web build.'; exit 1;
+          }
+          test -s build/web/sherpa-onnx-wasm-main-asr.wasm || {
+            echo 'ERROR: Sherpa WASM binary is missing from the web build.'; exit 1;
+          }
+          test -s build/web/audio_worklet.js || {
+            echo 'ERROR: audio_worklet.js is missing from the web build.'; exit 1;
+          }
+          echo "NATLU_BUILD_DIR=$NATLU_SRC_DIR/build/web" >> "$GITHUB_ENV"
+
+      - name: Prepare and verify the Quran/recite PWA
+        shell: bash
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          rm -rf recite
+          mkdir -p recite
+          cp -R "$NATLU_BUILD_DIR"/. recite/
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          repo = os.environ['GITHUB_REPOSITORY'].split('/')[1]
+          build_id = f"{os.environ['BUILD_NUMBER']}-{os.environ['BUILD_SHA'][:7]}"
+
+          def patch(path, pairs):
+              p = Path(path)
+              if not p.is_file():
+                  raise SystemExit(f"ERROR: required file not found: {path}")
+              s = p.read_text(encoding='utf-8')
+              for old, new, expected in pairs:
+                  count = s.count(old)
+                  if count != expected:
+                      raise SystemExit(f"ERROR: {path}: expected {expected} occurrence(s) of {old!r}, found {count}")
+                  s = s.replace(old, new)
+              p.write_text(s, encoding='utf-8')
+
+          debug_script = '<script>if(/[?&]debug/.test(location.search)){document.write("<script src=\\"https://cdn.jsdelivr.net/npm/eruda@3.0.1\\"><\\/script><script>eruda.init()<\\/script>")}</script>'
+          patch('recite/index.html', [
+              ('<base href="/recite/">', f'<base href="/{repo}/recite/">' + debug_script, 1),
+              ('for (const reg of regs) await reg.unregister();',
+               "for (const reg of regs) if (reg.scope.includes('/recite/')) await reg.unregister();", 1),
+              ('for (const k of keys) await caches.delete(k);',
+               "for (const k of keys) if (k.startsWith('recite-quran-pwa-')) await caches.delete(k);", 1),
+          ])
+
+          patch('recite/sw.js', [
+              ("const CACHE_NAME = 'recite-quran-pwa-v18-1792016698';",
+               f"const CACHE_NAME = 'recite-quran-pwa-v19-{build_id}';", 1),
+              (r"url.pathname.replace(/^\/recite\//, '')",
+               f"url.pathname.replace(/^\\/{repo}\\/recite\\//, '')", 2),
+              ('keys.filter((k) => k !== CACHE_NAME)',
+               "keys.filter((k) => k.startsWith('recite-quran-pwa-') && k !== CACHE_NAME)", 1),
+              ("if (url.pathname.includes('/download-model')) return;",
+               "if (url.pathname.includes('/download-model') || url.pathname.endsWith('.onnx')) return;", 1),
+              ("'assets/assets/model/tokens.txt',",
+               "'assets/packages/recite_quran/assets/model/tokens.txt',", 1),
+          ])
+
+          patch('recite/sherpa_official_app.js', [
+              ("const url = '/download-model?model=' + filename;",
+               "const url = new URL('assets/assets/model/' + filename, document.baseURI).href;", 1),
+              ('window.fetchSherpaModel = async function(url) {',
+               "window.fetchSherpaModel = async function(url) {\n  url = new URL('assets/assets/model/zipformer_p_arabic_v3.int8.onnx', document.baseURI).href;", 1),
+              ("supportsRanges = headRes.headers.get('accept-ranges') === 'bytes';",
+               "supportsRanges = false;", 1),
+          ])
+
+          bootstrap = Path('recite/flutter_bootstrap.js')
+          if not bootstrap.is_file():
+              raise SystemExit('ERROR: flutter_bootstrap.js is missing from the web build.')
+          s = bootstrap.read_text(encoding='utf-8')
+          s = __import__('re').sub(r'serviceWorkerSettings:\s*\{[\s\S]*?\}\s*,?', '', s)
+          old = 'if (!window._flutter) {\n  window._flutter = {};\n}\n_flutter.buildConfig'
+          if old not in s:
+              raise SystemExit('ERROR: Flutter bootstrap template changed; refusing an unverified patch.')
+          s = s.replace(old, 'var _flutter = window._flutter = window._flutter || {};\n_flutter.buildConfig', 1)
+          if '"builds":' not in s:
+              raise SystemExit('ERROR: Flutter bootstrap build configuration was not found.')
+          s = s.replace('"builds":', '"useLocalCanvasKit":true,"builds":', 1)
+          if '_flutter.loader.load();' not in s:
+              raise SystemExit('ERROR: Flutter loader call was not found in bootstrap.')
+          s = s.replace('_flutter.loader.load();', '_flutter.loader.load({config:{canvasKitBaseUrl:"canvaskit/"}});', 1)
+          bootstrap.write_text(s, encoding='utf-8')
+
+          Path('recite/flutter_service_worker.js').write_text('// Neutralized to protect custom sw.js\n', encoding='utf-8')
+          Path('recite/version.json').write_text(
+              '{"app_name":"the_great_quran","version":"1.1.0","build_number":"19","package_name":"the_great_quran"}\n',
+              encoding='utf-8')
+          PY
+
+          for f in recite/flutter_bootstrap.js recite/flutter.js; do
+            test -s "$f" || { echo "ERROR: missing $f"; exit 1; }
+            npx --yes esbuild@0.28.0 "$f" --target=es2018 --outfile="$f" --allow-overwrite
+          done
+          for f in recite/sherpa-onnx-wasm-main-asr.js; do
+            test -s "$f" || { echo "ERROR: missing $f"; exit 1; }
+            npx --yes esbuild@0.28.0 "$f" --target=es2020 --outfile="$f" --allow-overwrite
+          done
+
+          test -s recite/main.dart.js || test -s recite/main.dart.wasm || { echo 'ERROR: neither main.dart.js nor main.dart.wasm was built.'; exit 1; }
+          for f in \
+            recite/index.html \
+            recite/sw.js \
+            recite/flutter_bootstrap.js \
+            recite/sherpa_official_app.js \
+            recite/sherpa-onnx-asr.js \
+            recite/sherpa-onnx-wasm-main-asr.js \
+            recite/sherpa-onnx-wasm-main-asr.wasm \
+            recite/audio_worklet.js \
+            recite/assets/assets/model/zipformer_p_arabic_v3.int8.onnx \
+            recite/assets/packages/recite_quran/assets/model/tokens.txt \
+            recite/assets/packages/recite_quran/assets/model/ordered_quran_phonemes.json; do
+            test -s "$f" || { echo "ERROR: required built asset missing: $f"; exit 1; }
+          done
+          echo "6a5ddafa9c5e5c01260d30264031b341785bdc152e9ef1d569b41c8c278508eb  recite/assets/assets/model/zipformer_p_arabic_v3.int8.onnx" | sha256sum --check --status || {
+            echo 'ERROR: final PWA model SHA-256 does not match the APK model.'; exit 1;
+          }
+
+      - name: Commit rebuilt PWA
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name github-actions
           git config user.email actions@github.com
           git add -A recite
-          git commit -m "add recite" || echo "nothing to commit"
+          git commit -m "rebuild Natlu web baseline from source" || echo "nothing to commit"
           git push
