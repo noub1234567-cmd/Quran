@@ -163,7 +163,20 @@ jobs:
               ("supportsRanges = headRes.headers.get('accept-ranges') === 'bytes';",
                "supportsRanges = false;", 1),
           ])
+          # Persist the recognizer model override because recite/ is rebuilt from upstream.
+          patch('recite/sherpa-onnx-asr.js', [
+              ("const modelPath = (Module && Module.modelPath) ? Module.modelPath : '/zipformer_p_arabic_v3.int8.onnx';",
+               "const modelPath = '/zipformer_p_arabic_v3.int8.onnx';", 1),
+              ("  return new OnlineRecognizer(recognizerConfig, Module);",
+               "  recognizerConfig.modelConfig = recognizerConfig.modelConfig || {};\n  recognizerConfig.modelConfig.zipformer2Ctc = recognizerConfig.modelConfig.zipformer2Ctc || {};\n  recognizerConfig.modelConfig.zipformer2Ctc.model = modelPath;\n  recognizerConfig.modelConfig.tokens = tokensPath;\n\n  return new OnlineRecognizer(recognizerConfig, Module);", 1),
+          ])
 
+          for f in recite/sherpa-onnx-asr.js recite/sherpa_official_app.js; do
+            if grep -Fq 'quran_phoneme_zipformer.int8.onnx' "$f"; then
+              echo "ERROR: legacy ONNX model name found in $f"
+              exit 1
+            fi
+          done
           bootstrap = Path('recite/flutter_bootstrap.js')
           if not bootstrap.is_file():
               raise SystemExit('ERROR: flutter_bootstrap.js is missing from the web build.')
