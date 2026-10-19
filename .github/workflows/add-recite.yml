@@ -1,61 +1,179 @@
 name: add-recite
-on: workflow_dispatch
+
+on:
+  workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   add:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch and patch Natlu
+
+      - name: Download source package
         run: |
-          curl -L --fail -o /tmp/natlu.zip "https://huggingface.co/noubou/Natlu/resolve/main/Recite-Quran-Natlu-2d443d2.zip"
+          set -e
+
+          curl -L --fail -o /tmp/natlu.zip \
+            "https://huggingface.co/noubou/Natlu/resolve/main/Recite-Quran-Natlu-2d443d2.zip"
+
           unzip -q /tmp/natlu.zip -d /tmp/natlu
-          rm -rf recite
-          cp -r /tmp/natlu/*/landing_page/recite recite
-          cp /tmp/natlu/*/web/sherpa-onnx-wasm-main-asr.js recite/
-          cp /tmp/natlu/*/web/sherpa-onnx-wasm-main-asr.wasm recite/
-          cp /tmp/natlu/*/web/audio_worklet.js recite/
-          python3 - <<'E'
-          import os
-          r = os.environ['GITHUB_REPOSITORY'].split('/')[1]
-          def patch(path, pairs):
-              s = open(path, encoding='utf-8').read()
-              for a, b in pairs:
-                  assert a in s, (path, a)
-                  s = s.replace(a, b)
-              open(path, 'w', encoding='utf-8').write(s)
-          dbg = '<script>if(/[?&]debug/.test(location.search)){document.write("<script src=\\"https://cdn.jsdelivr.net/npm/eruda@3.0.1\\"><\\/script><script>eruda.init()<\\/script>")}</script>'
-          patch('recite/index.html', [
-              ('<base href="/recite/">', '<base href="/%s/recite/">' % r + dbg),
-              ('for (const reg of regs) await reg.unregister();',
-               "for (const reg of regs) if (reg.scope.includes('/recite/')) await reg.unregister();"),
-              ('for (const k of keys) await caches.delete(k);',
-               "for (const k of keys) if (k.startsWith('recite-quran-pwa-')) await caches.delete(k);"),
-          ])
-          patch('recite/sw.js', [
-              (r"/^\/recite\//", r"/^\/%s\/recite\//" % r),
-              ('keys.filter((k) => k !== CACHE_NAME)',
-               "keys.filter((k) => k.startsWith('recite-quran-pwa-') && k !== CACHE_NAME)"),
-              ("recite-quran-pwa-v18-1792016698", "recite-quran-pwa-v18-gh6"),
-              ("if (url.pathname.includes('/download-model')) return;",
-               "if (url.pathname.includes('/download-model') || url.pathname.endsWith('.onnx')) return;"),
-          ])
-          patch('recite/sherpa_official_app.js', [
-              ("const cleanM = (modelFilename || 'zipformer_p_arabic_v3.int8.onnx')",
-               "const cleanM = (modelFilename || 'quran_phoneme_zipformer.int8.onnx')"),
-              ("const url = '/download-model?model=' + filename;",
-               "const url = new URL('assets/assets/model/' + filename, document.baseURI).href;"),
-              ("window.fetchSherpaModel = async function(url) {",
-               "window.fetchSherpaModel = async function(url) {\n  url = new URL('assets/assets/model/quran_phoneme_zipformer.int8.onnx', document.baseURI).href;"),
-              ("supportsRanges = headRes.headers.get('accept-ranges') === 'bytes';",
-               "supportsRanges = false;"),
-          ])
-          E
-      - name: Commit
+
+      - name: Check and copy application files
         run: |
-          git config user.name github-actions
-          git config user.email actions@github.com
+          set -e
+
+          LANDING=$(find /tmp/natlu -type d \
+            -path '*/landing_page/recite' -print -quit)
+
+          if [ -z "$LANDING" ]; then
+            echo "ERROR: landing_page/recite not found"
+            exit 1
+          fi
+
+          WEB=$(dirname "$(find /tmp/natlu -type f \
+            -name 'sherpa-onnx-wasm-main-asr.js' -print -quit)")
+
+          if [ -z "$WEB" ] || [ "$WEB" = "." ]; then
+            echo "ERROR: Sherpa JavaScript file not found"
+            exit 1
+          fi
+
+          for FILE in \
+            sherpa-onnx-wasm-main-asr.js \
+            sherpa-onnx-wasm-main-asr.wasm \
+            audio_worklet.js
+          do
+            if [ ! -f "$WEB/$FILE" ]; then
+              echo "ERROR: Missing source file: $FILE"
+              exit 1
+            fi
+          done
+
+          DATA=$(find /tmp/natlu -type f \
+            -name 'sherpa-onnx-wasm-main-asr.data' -print -quit)
+
+          if [ -z "$DATA" ]; then
+            echo "ERROR: Required Sherpa .data file not found."
+            echo "The source package must be checked before deployment."
+            find /tmp/natlu -type f \
+              \( -name '*.data' -o -name '*sherpa*' \) \
+              | head -100
+            exit 1
+          fi
+
+          rm -rf recite
+          cp -a "$LANDING" recite
+
+          cp "$WEB/sherpa-onnx-wasm-main-asr.js" recite/
+          cp "$WEB/sherpa-onnx-wasm-main-asr.wasm" recite/
+          cp "$WEB/audio_worklet.js" recite/
+          cp "$DATA" recite/
+
+          echo "Sherpa files copied successfully."
+          ls -lh recite/sherpa-onnx-wasm-main-asr.*
+
+      - name: Patch application paths and cache
+        run: |
+          set -e
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          repo = os.environ["GITHUB_REPOSITORY"].split("/")[-1]
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+
+              if old not in text:
+                  raise SystemExit(
+                      f"ERROR: Expected text not found in {path}: {old}"
+                  )
+
+              p.write_text(
+                  text.replace(old, new, 1),
+                  encoding="utf-8"
+              )
+
+          index = Path("recite/index.html")
+          html = index.read_text(encoding="utf-8")
+
+          html = html.replace(
+              '<base href="/recite/">',
+              f'<base href="/{repo}/recite/">',
+              1
+          )
+
+          index.write_text(html, encoding="utf-8")
+
+          sw = Path("recite/sw.js")
+          text = sw.read_text(encoding="utf-8")
+
+          # Ensure the browser can cache the Sherpa data package.
+          wasm = "'sherpa-onnx-wasm-main-asr.wasm',"
+
+          if wasm not in text:
+              raise SystemExit(
+                  "ERROR: Cannot find WASM entry in recite/sw.js"
+              )
+
+          if "'sherpa-onnx-wasm-main-asr.data'," not in text:
+              text = text.replace(
+                  wasm,
+                  wasm + "\n  'sherpa-onnx-wasm-main-asr.data',",
+                  1
+              )
+
+          # Force a new cache version after deployment.
+          import re
+
+          text, count = re.subn(
+              r"const CACHE_NAME = '[^']+';",
+              "const CACHE_NAME = 'recite-quran-pwa-v19-gh7';",
+              text,
+              count=1
+          )
+
+          if count != 1:
+              raise SystemExit("ERROR: Could not update cache version")
+
+          sw.write_text(text, encoding="utf-8")
+
+          print("Application paths and cache version updated.")
+          PY
+
+      - name: Verify files
+        run: |
+          set -e
+
+          test -f recite/index.html
+          test -f recite/sw.js
+          test -f recite/sherpa-onnx-wasm-main-asr.js
+          test -f recite/sherpa-onnx-wasm-main-asr.wasm
+          test -f recite/sherpa-onnx-wasm-main-asr.data
+
+          grep -q "sherpa-onnx-wasm-main-asr.data" recite/sw.js
+
+          echo "All required files passed verification."
+
+      - name: Commit and push
+        run: |
+          set -e
+
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
           git add -A recite
-          git commit -m "add recite" || echo "nothing to commit"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Fix Sherpa ASR data package and cache"
           git push
