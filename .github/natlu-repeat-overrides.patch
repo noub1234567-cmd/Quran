@@ -1,0 +1,223 @@
+--- a/lib/ui/tracking_screen.dart
++++ b/lib/ui/tracking_screen.dart
+@@ -18,6 +18,7 @@
+ import 'widgets/verse_row.dart';
+ import 'widgets/mushaf/mushaf_view.dart';
+ import 'widgets/dialogs/speed_selection_dialog.dart';
++import 'repeat_memorization_screen.dart';
+ 
+ /// Main interactive screen for real-time recitation tracking and reading.
+ /// Manages scrolling, distraction-free reading headers, and mode switches.
+@@ -726,6 +727,37 @@
+               children: [
+                 // Main Verse Content
+                 Positioned.fill(child: _buildVerseContent(c, app, top)),
++
++                // Entry point for the dedicated repetition and memorization workflow.
++                Positioned(
++                  top: top + 72,
++                  left: 14,
++                  child: SafeArea(
++                    child: Material(
++                      color: c.primary,
++                      borderRadius: BorderRadius.circular(24),
++                      elevation: 3,
++                      child: InkWell(
++                        borderRadius: BorderRadius.circular(24),
++                        onTap: () {
++                          if (widget.isRecording) widget.onToggleRecord();
++                          AppState.instance.stopVerseAudio();
++                          Navigator.of(context).push(MaterialPageRoute(
++                            builder: (_) => RepeatMemorizationScreen(controller: widget.controller),
++                          ));
++                        },
++                        child: const Padding(
++                          padding: EdgeInsets.symmetric(horizontal: 13, vertical: 10),
++                          child: Row(mainAxisSize: MainAxisSize.min, children: [
++                            Icon(Icons.repeat_rounded, color: Colors.white, size: 18),
++                            SizedBox(width: 6),
++                            Text('التكرار والحفظ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
++                          ]),
++                        ),
++                      ),
++                    ),
++                  ),
++                ),
+ 
+                 // Top Floating Header
+                 Positioned(
+--- a/lib/ui/repeat_memorization_screen.dart
++++ b/lib/ui/repeat_memorization_screen.dart
+@@ -0,0 +1,144 @@
++import 'dart:async';
++import 'package:flutter/material.dart';
++import 'package:recite_quran/recite_quran.dart';
++import '../services/quran_audio_service.dart';
++import '../state/app_state.dart';
++
++/// Focused repetition and memorization controls; leaves the tracker features intact.
++class RepeatMemorizationScreen extends StatefulWidget {
++  final HighlightingController controller;
++  const RepeatMemorizationScreen({super.key, required this.controller});
++  @override
++  State<RepeatMemorizationScreen> createState() => _RepeatMemorizationScreenState();
++}
++
++class _RepeatMemorizationScreenState extends State<RepeatMemorizationScreen> {
++  int surah = 1, fromAyah = 1, toAyah = 7, repeats = 3, gapSeconds = 0;
++  int speedIndex = 1, timerMinutes = 0;
++  bool cumulative = false, hideText = false, running = false, paused = false;
++  int? currentAyah;
++  Timer? _stopTimer;
++  int _runToken = 0;
++  static const speeds = <double>[0.75, 1.0, 1.25];
++
++  int get maxAyahs => const [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6][surah - 1];
++
++  @override
++  void initState() {
++    super.initState();
++    surah = widget.controller.targetSurah.clamp(1, 114);
++    fromAyah = (widget.controller.activeAyah.value ?? 1).clamp(1, maxAyahs).toInt();
++    toAyah = fromAyah;
++  }
++
++  @override
++  void dispose() { _runToken++; _stopTimer?.cancel(); super.dispose(); }
++
++  Future<void> _waitForPlayback(int token) async {
++    final app = AppState.instance;
++    // Wait for audio to begin, allowing for network buffering.
++    final startedDeadline = DateTime.now().add(const Duration(seconds: 35));
++    while (token == _runToken && DateTime.now().isBefore(startedDeadline)) {
++      if (app.isAudioPlaying.value && !app.isAudioBuffering.value) break;
++      await Future.delayed(const Duration(milliseconds: 100));
++    }
++    if (token != _runToken) return;
++    if (!app.isAudioPlaying.value) throw TimeoutException('تعذر بدء تشغيل الآية');
++    final endDeadline = DateTime.now().add(const Duration(seconds: 90));
++    while (token == _runToken && DateTime.now().isBefore(endDeadline)) {
++      if (!app.isAudioPlaying.value && !app.isAudioBuffering.value) return;
++      await Future.delayed(const Duration(milliseconds: 120));
++    }
++  }
++
++  Future<void> _start() async {
++    if (running) return;
++    if (fromAyah > toAyah) { _toast('آية البداية يجب ألا تتجاوز آية النهاية'); return; }
++    final token = ++_runToken;
++    setState(() { running = true; paused = false; });
++    AppState.instance.stopVerseAudio();
++    if (timerMinutes > 0) {
++      _stopTimer?.cancel();
++      _stopTimer = Timer(Duration(minutes: timerMinutes), _stop);
++    }
++    try {
++      for (int round = 0; round < repeats && token == _runToken; round++) {
++        for (int target = fromAyah; target <= toAyah && token == _runToken; target++) {
++          // Cumulative mode replays the growing prefix: A; A-B; A-B-C; ...
++          final int end = cumulative ? target : toAyah;
++          for (int ayah = fromAyah; ayah <= end && token == _runToken; ayah++) {
++            setState(() => currentAyah = ayah);
++            await QuranAudioService.instance.setPlaybackSpeed(speeds[speedIndex]);
++            await QuranAudioService.instance.play(surah: surah, ayah: ayah, continuous: false);
++            await _waitForPlayback(token);
++            if (gapSeconds > 0 && token == _runToken) await Future.delayed(Duration(seconds: gapSeconds));
++          }
++          if (!cumulative) break;
++        }
++      }
++    } catch (e) {
++      if (token == _runToken && mounted) _toast('تعذر إكمال التشغيل. تحقق من اتصال الإنترنت.');
++    } finally {
++      if (token == _runToken && mounted) {
++        AppState.instance.stopVerseAudio();
++        setState(() { running = false; paused = false; });
++      }
++    }
++  }
++
++  void _stop() {
++    _runToken++;
++    _stopTimer?.cancel();
++    AppState.instance.stopVerseAudio();
++    if (mounted) setState(() { running = false; paused = false; });
++  }
++
++  void _toast(String text) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
++
++  @override
++  Widget build(BuildContext context) {
++    final app = AppState.instance;
++    final c = app.colors;
++    final meta = widget.controller.repository.surahMetadata;
++    final surahName = (surah - 1 < meta.length) ? meta[surah - 1].surahName : 'السورة $surah';
++    return Directionality(
++      textDirection: TextDirection.rtl,
++      child: Scaffold(
++        backgroundColor: c.bg,
++        appBar: AppBar(title: const Text('التكرار والحفظ'), backgroundColor: c.bg, foregroundColor: c.text),
++        body: ListView(padding: const EdgeInsets.all(16), children: [
++          _card(c, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
++            const Text('نطاق التلاوة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
++            const SizedBox(height: 12),
++            DropdownButtonFormField<int>(value: surah, decoration: const InputDecoration(labelText: 'السورة', border: OutlineInputBorder()), items: List.generate(114, (i) => DropdownMenuItem(value: i+1, child: Text('${i+1}. ${i < meta.length ? meta[i].surahName : 'السورة ${i+1}'}'))), onChanged: running ? null : (v) { if(v!=null) setState(() {surah=v; fromAyah=1; toAyah=maxAyahs;}); }),
++            const SizedBox(height: 10),
++            Row(children: [Expanded(child: _numberPicker('من آية', fromAyah, maxAyahs, (v)=>setState(()=>fromAyah=v))), const SizedBox(width: 12), Expanded(child: _numberPicker('إلى آية', toAyah, maxAyahs, (v)=>setState(()=>toAyah=v)))]),
++            Text('المحدد: $surahName • الآيات $fromAyah–$toAyah', style: TextStyle(color: c.muted)),
++          ])),
++          const SizedBox(height: 12),
++          _card(c, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
++            const Text('إعدادات التكرار', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
++            Row(children: [const Expanded(child: Text('عدد مرات التكرار')), DropdownButton<int>(value: repeats, items: [1,2,3,5,10,20,50].map((n)=>DropdownMenuItem(value:n, child:Text('$n'))).toList(), onChanged: running ? null : (v)=>setState(()=>repeats=v??3))]),
++            Row(children: [const Expanded(child: Text('الفاصل الصامت')), DropdownButton<int>(value: gapSeconds, items: const [DropdownMenuItem(value:0,child:Text('بدون')),DropdownMenuItem(value:2,child:Text('ثانيتان')),DropdownMenuItem(value:3,child:Text('3 ثوانٍ')),DropdownMenuItem(value:5,child:Text('5 ثوانٍ')),DropdownMenuItem(value:10,child:Text('10 ثوانٍ'))], onChanged: running ? null : (v)=>setState(()=>gapSeconds=v??0))]),
++            SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('التكرار التراكمي'), subtitle: const Text('تكرار المقطع من آية البداية إلى الآية الحالية'), value: cumulative, onChanged: running ? null : (v)=>setState(()=>cumulative=v)),
++            Row(children: [const Expanded(child: Text('سرعة القراءة')), DropdownButton<int>(value:speedIndex, items: const [DropdownMenuItem(value:0,child:Text('0.75×')),DropdownMenuItem(value:1,child:Text('1×')),DropdownMenuItem(value:2,child:Text('1.25×'))], onChanged: running ? null : (v)=>setState(()=>speedIndex=v??1))]),
++            Row(children: [const Expanded(child: Text('مؤقت الإيقاف')), DropdownButton<int>(value:timerMinutes, items: const [DropdownMenuItem(value:0,child:Text('بدون')),DropdownMenuItem(value:10,child:Text('10 دقائق')),DropdownMenuItem(value:20,child:Text('20 دقيقة')),DropdownMenuItem(value:30,child:Text('30 دقيقة')),DropdownMenuItem(value:60,child:Text('60 دقيقة'))], onChanged: running ? null : (v)=>setState(()=>timerMinutes=v??0))]),
++          ])),
++          const SizedBox(height: 12),
++          _card(c, Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
++            const Text('وضع الحفظ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
++            SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('إخفاء نص القرآن أثناء الحفظ'), subtitle: const Text('يمكنك أيضًا استخدام وضع إخفاء الكلمات في الشاشة الرئيسية'), value: hideText, onChanged: (v)=>setState(()=>hideText=v)),
++            if (currentAyah != null) Text(hideText ? 'الآية الحالية: $currentAyah (النص مخفي)' : 'الآية الحالية: $currentAyah', style: const TextStyle(fontSize: 17)),
++          ])),
++          const SizedBox(height: 18),
++          FilledButton.icon(onPressed: running ? _stop : _start, icon: Icon(running ? Icons.stop_rounded : Icons.play_arrow_rounded), label: Text(running ? 'إيقاف التكرار' : 'ابدأ التكرار'), style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54))),
++          const SizedBox(height: 10),
++          Text('التلاوة الصوتية تحتاج إلى اتصال بالإنترنت عند عدم وجود الملف في ذاكرة التخزين المؤقت.', style: TextStyle(color: c.muted, fontSize: 12)),
++        ]),
++      ),
++    );
++  }
++
++  Widget _card(ThemeColors c, Widget child) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: c.border)), child: child);
++  Widget _numberPicker(String label, int value, int max, ValueChanged<int> onChanged) => DropdownButtonFormField<int>(value: value.clamp(1,max).toInt(), isExpanded: true, decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()), items: List.generate(max, (i)=>DropdownMenuItem(value:i+1, child:Text('${i+1}'))), onChanged: running ? null : (v) { if(v!=null) onChanged(v); });
++}
+--- a/lib/services/audio/verse_audio_player.dart
++++ b/lib/services/audio/verse_audio_player.dart
+@@ -668,6 +668,13 @@
+     }
+   }
+ 
++  /// Adjusts the playback speed for repetition sessions.
++  Future<void> setPlaybackSpeed(double speed) async {
++    final player = _player;
++    if (player == null) return;
++    await player.setSpeed(speed.clamp(0.5, 2.0).toDouble());
++  }
++
+   /// Pauses playback and clears active word highlight while retaining resume state.
+   Future<void> pause() async {
+     try {
+--- a/lib/services/quran_audio_service.dart
++++ b/lib/services/quran_audio_service.dart
+@@ -52,6 +52,9 @@
+     );
+   }
+ 
++  /// Sets the playback speed (e.g. 0.75x, 1.0x, 1.25x).
++  Future<void> setPlaybackSpeed(double speed) => _player.setPlaybackSpeed(speed);
++
+   /// Pauses the active playback.
+   Future<void> pause() async {
+     await _player.pause();
