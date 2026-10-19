@@ -171,12 +171,7 @@ jobs:
                "  recognizerConfig.modelConfig = recognizerConfig.modelConfig || {};\n  recognizerConfig.modelConfig.zipformer2Ctc = recognizerConfig.modelConfig.zipformer2Ctc || {};\n  recognizerConfig.modelConfig.zipformer2Ctc.model = modelPath;\n  recognizerConfig.modelConfig.tokens = tokensPath;\n\n  return new OnlineRecognizer(recognizerConfig, Module);", 1),
           ])
 
-          for f in recite/sherpa-onnx-asr.js recite/sherpa_official_app.js; do
-            if grep -Fq 'quran_phoneme_zipformer.int8.onnx' "$f"; then
-              echo "ERROR: legacy ONNX model name found in $f"
-              exit 1
-            fi
-          done
+          
           bootstrap = Path('recite/flutter_bootstrap.js')
           if not bootstrap.is_file():
               raise SystemExit('ERROR: flutter_bootstrap.js is missing from the web build.')
