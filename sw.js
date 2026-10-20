@@ -1,5 +1,6 @@
 // يخزّن صفحات التطبيق ليفتح دون إنترنت (الصوت يُخزَّن من داخل التطبيق بزر «تحميل»)
-const CACHE = 'quran-app-v7';
+const CACHE = 'quran-app-v8';
+const KEEP = [CACHE, 'ayah-audio', 'qtext', 'fonts-v1', 'asr-model', 'asr-lib', 'phoneme-model'];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -9,7 +10,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => ![CACHE, 'ayah-audio', 'qtext', 'fonts-v1', 'asr-model', 'asr-lib'].includes(k)).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => !KEEP.includes(k) && !k.startsWith('recite-quran-pwa-')).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -26,7 +27,7 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-  // مكتبة onnxruntime-web: تُخزَّن مرة واحدة ليعمل التصحيح دون إنترنت (طلب CORS كي يكون الرد قابلاً للحفظ)
+  // مكتبة onnxruntime-web: تُخزَّن مرة واحدة ليعمل التصحيح دون إنترنت
   if (url.hostname === 'cdn.jsdelivr.net' && url.pathname.indexOf('/npm/onnxruntime-web@') === 0) {
     event.respondWith(
       caches.open('asr-lib').then((c) =>
@@ -36,6 +37,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (url.origin !== self.location.origin) return;
+  // تطبيق التسميع له عاملة خدمة مستقلة: لا نلمس ملفاته كي لا تتلوّث ذاكرته بنسخ قديمة
+  if (url.pathname.indexOf('/recite/') !== -1) return;
 
   event.respondWith(
     fetch(req)
