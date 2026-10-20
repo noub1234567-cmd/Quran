@@ -672,9 +672,15 @@ function createOnlineRecognizer(Module, myConfig) {
     ruleFsts: '',
     ruleFars: '',
   };
-  if (myConfig) {
+    if (myConfig) {
     recognizerConfig = myConfig;
   }
+
+  recognizerConfig.modelConfig = recognizerConfig.modelConfig || {};
+  recognizerConfig.modelConfig.zipformer2Ctc =
+      recognizerConfig.modelConfig.zipformer2Ctc || {};
+  recognizerConfig.modelConfig.zipformer2Ctc.model =
+      '/zipformer_p_arabic_v3.int8.onnx';
 
   return new OnlineRecognizer(recognizerConfig, Module);
 }
