@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download recite_quran source as text
+      - name: Dump targeted source files
         run: |
           mkdir -p /tmp/pkg
           curl -L --fail --retry 3 -o /tmp/pkg.tar.gz "https://pub.dev/api/archives/recite_quran-1.0.5.tar.gz"
@@ -15,12 +15,21 @@ jobs:
           rm -rf pkg-src
           mkdir pkg-src
           cd /tmp/pkg
-          { for f in $(find lib doc -type f \( -name '*.dart' -o -name '*.md' \) | sort) pubspec.yaml; do echo "=== FILE: $f ==="; cat "$f"; echo; done; } > "$GITHUB_WORKSPACE/pkg-src/recite_quran-1.0.5.txt"
+          find lib doc -type f -exec wc -c {} + | sort -k2 > "$GITHUB_WORKSPACE/pkg-src/tree.txt"
+          dump() {
+            out="$GITHUB_WORKSPACE/pkg-src/$1"; shift; : > "$out"
+            for f in "$@"; do
+              if [ -f "$f" ]; then echo "=== FILE: $f ===" >> "$out"; cat "$f" >> "$out"; echo >> "$out"; fi
+            done
+          }
+          dump tajweed.txt $(ls lib/tracking/tajweed/*.dart) doc/TAJWEED_GUIDE.md
+          dump matching.txt $(ls lib/tracking/word/*.dart) lib/tracking/tracker_config.dart
+          dump data.txt lib/data/quran_data.dart
           ls -la "$GITHUB_WORKSPACE/pkg-src"
       - name: Commit
         run: |
           git config user.name github-actions
           git config user.email actions@github.com
-          git add pkg-src
-          git commit -m "dump recite_quran source" || echo "nothing to commit"
+          git add -A pkg-src
+          git commit -m "dump recite_quran source (targeted)" || echo "nothing to commit"
           git push
