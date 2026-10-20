@@ -1,0 +1,26 @@
+name: dump-package-src
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download recite_quran source as text
+        run: |
+          mkdir -p /tmp/pkg
+          curl -L --fail --retry 3 -o /tmp/pkg.tar.gz "https://pub.dev/api/archives/recite_quran-1.0.5.tar.gz"
+          tar xzf /tmp/pkg.tar.gz -C /tmp/pkg
+          rm -rf pkg-src
+          mkdir pkg-src
+          cd /tmp/pkg
+          { for f in $(find lib doc -type f \( -name '*.dart' -o -name '*.md' \) | sort) pubspec.yaml; do echo "=== FILE: $f ==="; cat "$f"; echo; done; } > "$GITHUB_WORKSPACE/pkg-src/recite_quran-1.0.5.txt"
+          ls -la "$GITHUB_WORKSPACE/pkg-src"
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email actions@github.com
+          git add pkg-src
+          git commit -m "dump recite_quran source" || echo "nothing to commit"
+          git push
