@@ -1,0 +1,150 @@
+diff --git a/lib/tracking/tajweed/error_explainer.dart b/lib/tracking/tajweed/error_explainer.dart
+index 2cc3372..7157e0a 100644
+--- a/lib/tracking/tajweed/error_explainer.dart
++++ b/lib/tracking/tajweed/error_explainer.dart
+@@ -699,8 +699,13 @@ class ErrorExplainer {
+       );
+     }
+ 
++    // [TASHKEEL-FIX] Shaddah / Ghunnah spans carry an attached harakah
++    // (e.g. `ببِ`, `ننننَ`). It used to be skipped because these branches
++    // returned after the duration check; the vowel is now verified too.
+     if (span.isGhunnah) {
+-      if (spanDuration <= 0.0) return errors;
++      final List<ReciterError> tashkeelErrors =
++          _checkTashkeel(span, predText, wordRefEnd);
++      if (spanDuration <= 0.0) return tashkeelErrors;
+ 
+       final rule = span.matchedWordRule != null
+           ? _instantiateTajweedRule(span.matchedWordRule!, config)
+@@ -710,50 +715,64 @@ class ErrorExplainer {
+                   span.baseChar == 'ن' ? 'Mushaddad Noon' : 'Mushaddad Meem',
+             );
+ 
+-      return _evaluateDurationRule(
+-        rule: rule,
+-        span: span,
+-        predText: predText,
+-        spanDuration: spanDuration,
+-        speed: speed,
+-        categoryTag: 'GHUNNAH',
+-      );
++      return [
++        ...tashkeelErrors,
++        ..._evaluateDurationRule(
++          rule: rule,
++          span: span,
++          predText: predText,
++          spanDuration: spanDuration,
++          speed: speed,
++          categoryTag: 'GHUNNAH',
++        ),
++      ];
+     }
+ 
+     if (span.isShaddah) {
+-      if (spanDuration <= 0.0) return errors;
+-
+-      return _evaluateDurationRule(
+-        rule: const ShaddahRule(),
+-        span: span,
+-        predText: predText,
+-        spanDuration: spanDuration,
+-        speed: speed,
+-        categoryTag: 'SHADDAH',
+-      );
++      final List<ReciterError> tashkeelErrors =
++          _checkTashkeel(span, predText, wordRefEnd);
++      if (spanDuration <= 0.0) return tashkeelErrors;
++
++      return [
++        ...tashkeelErrors,
++        ..._evaluateDurationRule(
++          rule: const ShaddahRule(),
++          span: span,
++          predText: predText,
++          spanDuration: spanDuration,
++          speed: speed,
++          categoryTag: 'SHADDAH',
++        ),
++      ];
+     }
+ 
+     // ── Phase 3: Tashkeel / Harakat Evaluation on Matching Base Consonants ──
++    return _checkTashkeel(span, predText, wordRefEnd);
++  }
++
++  /// Compares the harakat (fatha / damma / kasra) expected on [span] with the
++  /// harakat actually recited. A missing harakah on the terminal letter of a
++  /// word is a valid Waqf (sukoon), not an error.
++  static List<ReciterError> _checkTashkeel(
++    _PhoneticSpan span,
++    String predText,
++    int wordRefEnd,
++  ) {
+     final String refVowels = _extractVowels(span.refText);
+     final String predVowels = _extractVowels(predText);
+-
+-    if (refVowels.isNotEmpty || predVowels.isNotEmpty) {
+-      // Stopping on Sukoon (no vowel) on the terminal letter of the word is valid Waqf, not a Tashkeel error
+-      final bool isTerminalWaqf =
+-          span.refEnd == wordRefEnd && predVowels.isEmpty;
+-      if (!isTerminalWaqf && refVowels != predVowels) {
+-        errors.add(
+-          ReciterError(
+-            errorType: ErrorCategory.tashkeel,
+-            speechErrorType: SpeechErrorType.replace,
+-            expectedPh: span.refText,
+-            predictedPh: predText,
+-          ),
+-        );
+-      }
+-    }
+-
+-    return errors;
++    if (refVowels.isEmpty && predVowels.isEmpty) return const [];
++
++    final bool isTerminalWaqf = span.refEnd == wordRefEnd && predVowels.isEmpty;
++    if (isTerminalWaqf || refVowels == predVowels) return const [];
++
++    return [
++      ReciterError(
++        errorType: ErrorCategory.tashkeel,
++        speechErrorType: SpeechErrorType.replace,
++        expectedPh: span.refText,
++        predictedPh: predText,
++      ),
++    ];
+   }
+ 
+   // ───────────────────────────────────────────────────────────────────────────
+diff --git a/lib/tracking/word/dictation_matcher.dart b/lib/tracking/word/dictation_matcher.dart
+index 8dfc926..22ec09f 100644
+--- a/lib/tracking/word/dictation_matcher.dart
++++ b/lib/tracking/word/dictation_matcher.dart
+@@ -134,6 +134,9 @@ class PhoneticCostEngine {
+     }
+   }
+ 
++  /// Cost of substituting one short vowel (fatha / damma / kasra) for another.
++  static const double harakatSubstitutionCost = 0.5;
++
+   // ── 4. Tashkeel / Short Vowel Detection (Cost = 1.0) ──
+   static bool isTashkeel(int code) =>
+       code == 0x064E || code == 0x064F || code == 0x0650; // Fatha, Damma, Kasra
+@@ -159,6 +162,15 @@ class PhoneticCostEngine {
+       return acousticConfusionCost;
+     }
+ 
++    // [TASHKEEL-FIX] Fatha <-> Damma <-> Kasra: the consonant is right and only
++    // the vowel differs. Charging a full 1.0 made words of <= 3 phonemes fail
++    // the match threshold altogether, so no Tashkeel error was ever reported
++    // for them. With a reduced cost the word still aligns and the error is
++    // reported precisely, by ErrorExplainer, as a Tashkeel mistake.
++    if (isTashkeel(asrCodeUnit) && isTashkeel(refCodeUnit)) {
++      return harakatSubstitutionCost;
++    }
++
+     // STRICT HARAKAT PENALTY: (If it involves a Harakat but wasn't in the matrix above, it's a 1.0 error)
+     if (isTashkeel(asrCodeUnit) || isTashkeel(refCodeUnit)) {
+       return 1.00;
