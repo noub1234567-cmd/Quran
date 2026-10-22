@@ -59,39 +59,6 @@ jobs:
           done
           echo "NATLU_SRC_DIR=$SRC_DIR" >> "$GITHUB_ENV"
 
-      - name: Patch recite_quran 1.0.5 (stricter Tashkeel detection)
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd "$NATLU_SRC_DIR"
-          flutter pub get
-          PKG="$(find "${PUB_CACHE:-$HOME/.pub-cache}/hosted" -maxdepth 2 -type d -name 'recite_quran-1.0.5' -print -quit)"
-          test -n "$PKG" || { echo 'ERROR: recite_quran-1.0.5 was not found in the pub cache.'; exit 1; }
-          # Work on a private copy and point the app at it, so the shared pub cache
-          # (and its content hashes) is never modified.
-          VENDOR="$NATLU_SRC_DIR/third_party/recite_quran"
-          rm -rf "$VENDOR"
-          mkdir -p "$(dirname "$VENDOR")"
-          cp -R "$PKG" "$VENDOR"
-          # The pub.dev archive ships these files with CRLF line endings; the patch is LF.
-          sed -i 's/\r$//' "$VENDOR/lib/tracking/tajweed/error_explainer.dart" "$VENDOR/lib/tracking/word/dictation_matcher.dart"
-          (cd "$VENDOR" && patch --batch --forward --fuzz=0 -p1 < "$GITHUB_WORKSPACE/.github/recite-quran-tashkeel.patch")
-          grep -q 'harakatSubstitutionCost' "$VENDOR/lib/tracking/word/dictation_matcher.dart"
-          grep -q 'TASHKEEL-FIX' "$VENDOR/lib/tracking/tajweed/error_explainer.dart"
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-          p = Path(os.environ['NATLU_SRC_DIR']) / 'pubspec.yaml'
-          s = p.read_text(encoding='utf-8')
-          old = 'dependency_overrides:\n  sherpa_onnx_ios: 1.13.5\n'
-          if s.count(old) != 1:
-              raise SystemExit('ERROR: dependency_overrides block not found exactly once in pubspec.yaml')
-          s = s.replace(old, old + '  recite_quran:\n    path: third_party/recite_quran\n')
-          p.write_text(s, encoding='utf-8')
-          PY
-          flutter pub get
-          grep -n 'recite_quran' -A2 pubspec.lock | head -8
-
       - name: Download and verify the exact APK model
         shell: bash
         run: |
@@ -113,6 +80,10 @@ jobs:
         run: |
           set -euo pipefail
           cd "$NATLU_SRC_DIR"
+          mkdir -p packages/recite_quran
+          curl -L --fail --retry 3 --retry-delay 2 -o /tmp/rq.tar.gz "https://pub.dev/api/archives/recite_quran-1.0.5.tar.gz"
+          tar xzf /tmp/rq.tar.gz -C packages/recite_quran
+          python3 "$GITHUB_WORKSPACE/.github/patch_recite_quran.py" "$NATLU_SRC_DIR"
           flutter pub get
           flutter build web --release --base-href "/recite/" --pwa-strategy=none --no-web-resources-cdn
           MODEL="build/web/assets/assets/model/zipformer_p_arabic_v3.int8.onnx"
