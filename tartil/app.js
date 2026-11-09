@@ -92,10 +92,14 @@
   }
 
   // ---------- model ----------
+  const KEYS = { cpu: 'local-model-v1', gpu: 'local-model-fp16-v1' };
+  let mode = 'cpu';
+  try { mode = localStorage.getItem('tartil.mode') === 'gpu' ? 'gpu' : 'cpu'; } catch (e) {}
+  const urlFor = (m) => (m === 'gpu' ? CFG.modelUrl.replace('int8', 'fp16') : CFG.modelUrl);
   async function openCache() { try { return await caches.open(CFG.cache); } catch (e) { return null; } }
-  async function cachedModel() { const c = await openCache(); if (!c) return null; const hit = await c.match('local-model-v1'); return hit ? new Uint8Array(await hit.arrayBuffer()) : null; }
-  async function fetchModel(onp) {
-    const res = await fetch(CFG.modelUrl);
+  async function cachedBytes(m) { const c = await openCache(); if (!c) return null; const hit = await c.match(KEYS[m]); return hit ? new Uint8Array(await hit.arrayBuffer()) : null; }
+  async function fetchModel(url, onp) {
+    const res = await fetch(url);
     if (!res.ok) throw new Error('تعذّر تنزيل النموذج (HTTP ' + res.status + ')');
     const total = +res.headers.get('content-length') || 0, rd = res.body.getReader();
     let buf = total ? new Uint8Array(total) : null, got = 0, chunks = [];
@@ -104,30 +108,39 @@
     if (total && got !== total) throw new Error('انقطع التنزيل قبل أن يكتمل، أعد المحاولة');
     return buf;
   }
-  function startWorker(bytes) {
+  function startWorker(bytes, provider) {
     return new Promise((resolve, reject) => {
-      worker = new Worker('worker.js');
-      worker.onmessage = (ev) => { if (ev.data.type === 'ready') resolve(); else if (ev.data.type === 'error') reject(new Error(ev.data.message)); };
-      worker.onerror = (e) => reject(new Error('تعذّر تشغيل خيط التحليل'));
-      worker.postMessage({ type: 'init', ortBase: CFG.ortBase, bytes: bytes.buffer }, [bytes.buffer]);
+      const w = new Worker('worker.js'), threads = self.crossOriginIsolated ? Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2)) : 1;
+      w.onmessage = (ev) => { if (ev.data.type === 'ready') { worker = w; resolve(ev.data); } else if (ev.data.type === 'error') { w.terminate(); reject(new Error(ev.data.message)); } };
+      w.onerror = () => { w.terminate(); reject(new Error('تعذّر تشغيل خيط التحليل')); };
+      w.postMessage({ type: 'init', ortBase: CFG.ortBase, bytes: bytes.buffer, provider, threads }, [bytes.buffer]);
     });
   }
-  async function loadModel(fileBytes) {
-    $('loadBtn').disabled = true; $('prog').style.display = 'block';
+  function describe(r, m) {
+    const x = (r.warmMs / 3000).toFixed(1);
+    return '✓ النموذج جاهز — ' + (m === 'gpu' ? 'وضع GPU' : 'وضع المعالج (' + r.threads + ' خيوط)') + ' — السرعة ×' + x + ' من زمن الصوت';
+  }
+  async function bringUp(m, fileBytes) {
+    $('loadBtn').disabled = true; $('gpuBtn').disabled = true; $('prog').style.display = 'block'; modelReady = false; $('go').disabled = true;
+    if (worker) { worker.terminate(); worker = null; }
     try {
-      let bytes = fileBytes || await cachedModel();
+      let bytes = fileBytes || await cachedBytes(m), fresh = false;
       if (!bytes) {
-        $('modelState').textContent = 'جارٍ تنزيل النموذج…';
-        bytes = await fetchModel((g, t) => { $('progBar').style.width = (t ? 100 * g / t : 50) + '%'; $('modelState').textContent = 'جارٍ التنزيل: ' + Math.round(g / 1e6) + (t ? ' / ' + Math.round(t / 1e6) : '') + ' ميغابايت'; });
+        fresh = true; $('modelState').textContent = 'جارٍ تنزيل النموذج…';
+        bytes = await fetchModel(urlFor(m), (g, t) => { $('progBar').style.width = (t ? 100 * g / t : 50) + '%'; $('modelState').textContent = 'جارٍ التنزيل: ' + Math.round(g / 1e6) + (t ? ' / ' + Math.round(t / 1e6) : '') + ' ميغابايت'; });
       }
-      const c = await openCache();
-      if (c && !(await c.match('local-model-v1'))) { try { await c.put('local-model-v1', new Response(bytes.slice(0))); } catch (e) { /* storage full: continue */ } }
-      $('modelState').textContent = 'جارٍ تهيئة النموذج…'; $('progBar').style.width = '100%';
-      await startWorker(bytes); hookWorker();
-      modelReady = true; $('modelState').textContent = '✓ النموذج جاهز'; $('prog').style.display = 'none'; $('loadBtn').style.display = 'none'; $('go').disabled = false;
+      if (fresh || fileBytes) { const c = await openCache(); if (c) { try { await c.put(KEYS[m], new Response(bytes.slice(0))); } catch (e) { /* storage full: continue */ } } }
+      $('modelState').textContent = 'جارٍ تهيئة النموذج وتجربته…'; $('progBar').style.width = '100%';
+      const r = await startWorker(bytes, m === 'gpu' ? 'webgpu' : 'wasm'); hookWorker();
+      mode = m; try { localStorage.setItem('tartil.mode', m); } catch (e) {}
+      modelReady = true; $('modelState').textContent = describe(r, m); $('prog').style.display = 'none'; $('loadBtn').style.display = 'none'; $('go').disabled = false;
+      $('gpuBtn').textContent = m === 'gpu' ? 'العودة إلى وضع المعالج' : 'تجربة وضع GPU (أسرع، نحو 630 ميغابايت)';
     } catch (e) {
-      $('modelState').textContent = 'تعذّر: ' + e.message; $('loadBtn').disabled = false; $('prog').style.display = 'none';
+      $('prog').style.display = 'none';
+      if (m === 'gpu') { $('modelState').textContent = 'وضع GPU غير متاح على هذا الجهاز (' + e.message + ')، أعود إلى المعالج…'; try { localStorage.setItem('tartil.mode', 'cpu'); } catch (e2) {} await bringUp('cpu'); return; }
+      $('modelState').textContent = 'تعذّر: ' + e.message; $('loadBtn').disabled = false;
     }
+    $('gpuBtn').disabled = false;
   }
   let rid = 0; const waiting = new Map();
   function runModel(samples) {
@@ -214,12 +227,23 @@
     $('showPos').onchange = () => $('text').parentNode.classList.toggle('hidepos', !$('showPos').checked);
     $('text').onclick = (e) => { const t = e.target.closest('.w'); if (t) showDetail(+t.dataset.i); };
     $('modelUrl').onchange = () => { CFG.modelUrl = $('modelUrl').value.trim(); try { localStorage.setItem('tartil.modelUrl', CFG.modelUrl); } catch (e) {} };
-    $('modelFile').onchange = async (e) => { const f = e.target.files[0]; if (f) { const c = await openCache(); if (c) await c.delete('local-model-v1'); loadModel(new Uint8Array(await f.arrayBuffer())); } };
-    $('loadBtn').onclick = () => loadModel();
-    const cached = await cachedModel().catch(() => null);
-    if (cached) { $('modelState').textContent = 'النموذج محفوظ في هاتفك'; loadModel(cached); }
+    $('modelFile').onchange = async (e) => { const f = e.target.files[0]; if (f) { const c = await openCache(); if (c) await c.delete(KEYS.cpu); bringUp('cpu', new Uint8Array(await f.arrayBuffer())); } };
+    $('loadBtn').onclick = () => bringUp(mode);
+    $('gpuBtn').onclick = () => bringUp(mode === 'gpu' ? 'cpu' : 'gpu');
+    if (!navigator.gpu) $('gpuBtn').style.display = 'none';
+    const cached = await cachedBytes(mode).catch(() => null);
+    if (cached) { $('modelState').textContent = 'النموذج محفوظ في هاتفك'; bringUp(mode, cached); }
     else { $('modelState').textContent = 'النموذج غير محمَّل بعد'; }
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
   }
-  init();
+  // عامل الخدمة يضيف ترويسات العزل (COOP/COEP) كي تعمل خيوط WebAssembly المتعددة؛ تلزم إعادة تحميل واحدة بعد أول تسجيل
+  (async function boot() {
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      try {
+        await navigator.serviceWorker.register('sw.js'); await navigator.serviceWorker.ready;
+        let done = false; try { done = sessionStorage.getItem('tartil.coi') === '1'; } catch (e) {}
+        if (!self.crossOriginIsolated && !done) { try { sessionStorage.setItem('tartil.coi', '1'); } catch (e) {} location.reload(); return; }
+      } catch (e) { /* بلا عزل: يعمل بخيط واحد */ }
+    }
+    init();
+  })();
 })();
