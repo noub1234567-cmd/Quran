@@ -10,7 +10,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => !KEEP.includes(k) && !k.startsWith('recite-quran-pwa-')).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => !KEEP.includes(k) && !k.startsWith('recite-quran-pwa-') && !k.startsWith('tartil-')).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -39,6 +39,8 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   // تطبيق التسميع له عاملة خدمة مستقلة: لا نلمس ملفاته كي لا تتلوّث ذاكرته بنسخ قديمة
   if (url.pathname.indexOf('/recite/') !== -1) return;
+  // تطبيق ترتيل أيضاً مستقل (له عاملة خدمة وذاكرة خاصة)
+  if (url.pathname.indexOf('/tartil/') !== -1) return;
 
   event.respondWith(
     fetch(req)
