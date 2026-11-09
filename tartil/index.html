@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b5d52">
+<link rel="manifest" href="manifest.json">
+<title>ترتيل — تصحيح التلاوة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f1e8;--card:#fffdf7;--ink:#1b2b28;--mute:#657a76;--brand:#0b5d52;--line:#ddd6c3;
+--ok:#1f7a4d;--okbg:#e3f3e9;--err:#b3261e;--errbg:#fde7e4;--pos:#9a6200;--posbg:#fff1d6;--part:#7a8a87}
+@media (prefers-color-scheme:dark){:root{--bg:#10201d;--card:#172a26;--ink:#e8efec;--mute:#93aaa5;--brand:#3fb59f;--line:#2a423d;
+--ok:#6fd39b;--okbg:#18382a;--err:#ff8a80;--errbg:#3d1d1a;--pos:#f5c26b;--posbg:#3a2d12;--part:#9cb0ab}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,"Segoe UI",Tahoma,sans-serif;padding-bottom:96px}
+header{background:var(--brand);color:#fff;padding:14px 16px;text-align:center;font-size:20px;font-weight:700}
+header small{display:block;font-weight:400;font-size:12px;opacity:.85;margin-top:2px}
+.card{background:var(--card);margin:12px 16px;padding:14px;border-radius:14px;border:1px solid var(--line)}
+.card h2{margin:0 0 10px;font-size:15px;color:var(--brand)}
+label{display:block;font-size:12px;color:var(--mute);margin:0 0 4px}
+select,input[type=number]{width:100%;padding:10px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+.row{display:flex;gap:8px}.row>div{flex:1}
+button{font:inherit;font-size:16px;border:0;border-radius:12px;padding:12px 14px;cursor:pointer;background:var(--okbg);color:var(--ok)}
+button:disabled{opacity:.45}
+.primary{background:var(--brand);color:#fff;font-weight:700}
+.rec{background:var(--err);color:#fff;font-weight:700}
+.full{width:100%;margin-top:10px}
+.hint{font-size:12px;color:var(--mute);margin:8px 0 0;line-height:1.7}
+#bar{position:fixed;bottom:0;left:0;right:0;background:#10312e;color:#fff;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;align-items:center}
+#status{flex:1;font-size:14px;line-height:1.5}
+#meter{height:4px;background:#2a4a45;position:fixed;bottom:0;left:0;right:0}
+#bar button{padding:10px 16px}
+.progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:8px}
+.progress i{display:block;height:100%;width:0;background:var(--brand);transition:width .2s}
+#text{font-family:'Amiri Quran','Amiri','Scheherazade New',serif;font-size:var(--fs,28px);line-height:2.4;text-align:right}
+.w{padding:0 2px;border-radius:6px;cursor:default}
+.st-pending{color:var(--ink)}
+.st-partial{color:var(--part)}
+.st-ok{color:var(--ok);background:var(--okbg)}
+.st-possible{color:var(--pos);background:var(--posbg)}
+.st-error{color:var(--err);background:var(--errbg);font-weight:700;cursor:pointer}
+.st-possible.hasflag{cursor:pointer}
+.hidepos .st-possible{color:var(--ok);background:var(--okbg);cursor:default}
+.vn{font-family:system-ui;font-size:.5em;color:var(--mute);margin:0 4px}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}
+.legend span b{padding:1px 8px;border-radius:6px;font-weight:400}
+#detail{display:none;border-right:4px solid var(--err);padding:10px 12px;margin-top:10px;background:var(--errbg);border-radius:8px;font-size:15px;line-height:1.8}
+#report .item{padding:10px 0;border-bottom:1px solid var(--line);font-size:15px;line-height:1.8}
+#report .item:last-child{border:0}
+.tag{display:inline-block;font-size:11px;color:var(--mute);border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-inline-start:4px}
+.big{font-family:'Amiri Quran',serif;font-size:1.3em}
+details summary{cursor:pointer;color:var(--brand);font-size:14px}
+.tog{display:flex;align-items:center;gap:8px;font-size:14px;margin-top:10px}
+</style>
+</head>
+<body>
+<header>ترتيل<small>يستمع أثناء قراءتك ويقارن بالمصحف — على جهازك بلا إنترنت</small></header>
+
+<div class="card" id="modelCard">
+  <h2>النموذج</h2>
+  <div id="modelState">جارٍ الفحص…</div>
+  <div class="progress" id="prog" style="display:none"><i id="progBar"></i></div>
+  <button class="primary full" id="loadBtn">تحميل النموذج</button>
+  <details style="margin-top:10px"><summary>خيارات متقدمة</summary>
+    <label style="margin-top:10px">رابط النموذج (model.int8.onnx)</label>
+    <input id="modelUrl" type="text" dir="ltr" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)">
+    <label style="margin-top:10px">أو اختر الملف من هاتفك</label>
+    <input id="modelFile" type="file">
+  </details>
+  <p class="hint">يُحمَّل النموذج (نحو 355 ميغابايت) مرة واحدة ثم يُحفظ في هاتفك.</p>
+</div>
+
+<div class="card">
+  <h2>المقطع</h2>
+  <label>السورة</label><select id="sura"></select>
+  <div class="row" style="margin-top:8px"><div><label>من آية</label><select id="from"></select></div><div><label>إلى آية</label><select id="to"></select></div></div>
+  <p class="hint">اقرأ بصوت واضح وفي مكان هادئ. يُحلَّل كلامك عند كل وقفة قصيرة، وتتلوّن الكلمات أثناء القراءة.</p>
+  <div class="row" style="margin-top:8px"><button id="fileBtn" class="full" style="margin-top:0">تحليل ملف صوت</button><input id="audioFile" type="file" accept="audio/*" style="display:none"></div>
+</div>
+
+<div class="card">
+  <div id="text"></div>
+  <div class="legend"><span><b class="st-ok">صحيح</b></span><span><b class="st-error">خطأ مؤكد</b></span><span><b class="st-possible">محتمل</b></span><span><b class="st-partial">قيد التحليل</b></span></div>
+  <label class="tog"><input type="checkbox" id="showPos" checked> أظهر الأخطاء المحتملة</label>
+  <div id="detail"></div>
+</div>
+
+<div class="card" id="reportCard" style="display:none"><h2>التقرير</h2><div id="summary"></div><div id="report"></div></div>
+
+<div id="bar"><div id="status">اختر المقطع ثم اضغط ابدأ</div><button id="go" class="primary" disabled>ابدأ</button></div>
+<script src="detect.js"></script>
+<script src="tracker.js"></script>
+<script src="live.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
