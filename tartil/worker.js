@@ -8,11 +8,13 @@ self.onmessage = async function (ev) {
   var m = ev.data || {};
   if (m.type === 'init') {
     try {
-      if (!self.ort) importScripts(m.ortBase + 'ort.min.js');
+      var gpu = m.ep === 'webgpu';
+      if (gpu && !self.navigator.gpu) throw new Error('WebGPU غير متاح');
+      if (!self.ort) importScripts(m.ortBase + (gpu ? 'ort.webgpu.min.js' : 'ort.min.js'));
       self.ort.env.wasm.wasmPaths = m.ortBase;
-      self.ort.env.wasm.numThreads = 1;
-      session = await self.ort.InferenceSession.create(new Uint8Array(m.bytes), { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
-      self.postMessage({ type: 'ready' });
+      self.ort.env.wasm.numThreads = (!gpu && self.crossOriginIsolated) ? Math.max(1, m.threads || 1) : 1;
+      session = await self.ort.InferenceSession.create(new Uint8Array(m.bytes), { executionProviders: gpu ? ['webgpu'] : ['wasm'], graphOptimizationLevel: 'all' });
+      self.postMessage({ type: 'ready', ep: m.ep, threads: self.ort.env.wasm.numThreads, isolated: !!self.crossOriginIsolated });
     } catch (e) { self.postMessage({ type: 'error', message: String((e && e.message) || e) }); }
     return;
   }

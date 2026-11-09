@@ -1,5 +1,5 @@
 // يخزّن ملفات الصفحة ليفتح دون إنترنت؛ النموذج يخزَّن من داخل التطبيق (Cache API: tartil-model)
-const CACHE = 'tartil-app-v1';
+const CACHE = 'tartil-app-v2';
 const FILES = ['./', 'index.html', 'app.js', 'detect.js', 'tracker.js', 'live.js', 'worker.js', 'tartil_ref.json.gz', 'manifest.json'];
 self.addEventListener('install', (e) => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES).catch(() => {}))); });
 self.addEventListener('activate', (e) => {
@@ -13,5 +13,12 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (url.origin !== self.location.origin || url.pathname.indexOf('/tartil/') < 0) return;
-  e.respondWith(fetch(req).then((r) => { const cp = r.clone(); caches.open(CACHE).then((c) => c.put(req, cp)); return r; }).catch(() => caches.match(req)));
+  // COOP/COEP headers make the page cross-origin isolated, which unlocks multi-threaded WASM (faster analysis)
+  const iso = (r) => {
+    if (!r || r.status === 0 || r.type === 'opaque') return r;
+    const h = new Headers(r.headers);
+    h.set('Cross-Origin-Opener-Policy', 'same-origin'); h.set('Cross-Origin-Embedder-Policy', 'credentialless'); h.set('Cross-Origin-Resource-Policy', 'same-origin');
+    return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
+  };
+  e.respondWith(fetch(req).then((r) => { const cp = r.clone(); caches.open(CACHE).then((c) => c.put(req, cp)); return iso(r); }).catch(() => caches.match(req).then(iso)));
 });

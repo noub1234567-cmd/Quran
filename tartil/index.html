@@ -67,6 +67,9 @@ details summary{cursor:pointer;color:var(--brand);font-size:14px}
   <details style="margin-top:10px"><summary>خيارات متقدمة</summary>
     <label style="margin-top:10px">رابط النموذج (model.int8.onnx)</label>
     <input id="modelUrl" type="text" dir="ltr" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)">
+    <label style="margin-top:10px">طريقة التشغيل (السرعة)</label>
+    <select id="mode"></select>
+    <p class="hint" id="isoInfo"></p>
     <label style="margin-top:10px">أو اختر الملف من هاتفك</label>
     <input id="modelFile" type="file">
   </details>
