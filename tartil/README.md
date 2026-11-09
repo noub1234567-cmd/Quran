@@ -16,4 +16,4 @@
 يمكن تغيير الرابط من «خيارات متقدمة» أو بـ `?model=<url>`، أو اختيار الملف من الهاتف.
 
 ## الاختبار
-`node tartil/test/test_tracker.js` من مجلد `tartil/` (يلزم `node` فقط).
+`node tartil/test/test_tracker.js` (يلزم `node` فقط).

@@ -1,4 +1,4 @@
-const D=require('./detect.js'), cases=require('./golden.json');
+const D=require('../detect.js'), cases=require('./golden.json');
 let bad=0;
 for(const c of cases){
   const lp=Float32Array.from(c.logp);

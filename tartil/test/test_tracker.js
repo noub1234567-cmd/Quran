@@ -1,6 +1,6 @@
 const fs=require('fs'),zlib=require('zlib');
-const ref=JSON.parse(zlib.gunzipSync(fs.readFileSync('tartil_ref.json.gz')));
-const T=require('./tracker.js');
+const ref=JSON.parse(zlib.gunzipSync(fs.readFileSync(__dirname+'/../tartil_ref.json.gz')));
+const T=require('../tracker.js');
 const pass=T.buildPassage(ref,114,1,6);
 const vocab=ref.vocab, V=Object.keys(vocab).length+1;
 let seed=12345; const rnd=()=>(seed=(seed*1103515245+12345)&0x7fffffff)/0x7fffffff;
