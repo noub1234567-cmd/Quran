@@ -61,17 +61,19 @@ details summary{cursor:pointer;color:var(--brand);font-size:14px}
 
 <div class="card" id="modelCard">
   <h2>النموذج</h2>
-  <div id="modelState">جارٍ الفحص…</div>
+  <label>النموذج</label>
+  <select id="modelSel"><option value="lite12">خفيف 12 طبقة — متوازن (الأنسب)</option><option value="lite8">خفيف 8 طبقات — الأسرع</option><option value="v7">الأصلي 24 طبقة — الأدق والأبطأ</option></select>
+  <div id="modelState" style="margin-top:8px">جارٍ الفحص…</div>
   <div class="progress" id="prog" style="display:none"><i id="progBar"></i></div>
   <button class="primary full" id="loadBtn">تحميل النموذج</button>
   <button class="full" id="gpuBtn" style="background:var(--posbg);color:var(--pos)">تجربة وضع GPU (أسرع، نحو 630 ميغابايت)</button>
   <details style="margin-top:10px"><summary>خيارات متقدمة</summary>
-    <label style="margin-top:10px">رابط النموذج (model.int8.onnx)</label>
+    <label style="margin-top:10px">رابط مخصص (اختياري، يتجاوز الاختيار أعلاه)</label>
     <input id="modelUrl" type="text" dir="ltr" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)">
     <label style="margin-top:10px">أو اختر الملف من هاتفك</label>
     <input id="modelFile" type="file">
   </details>
-  <p class="hint">يُحمَّل النموذج (نحو 355 ميغابايت) مرة واحدة ثم يُحفظ في هاتفك.</p>
+  <p class="hint" id="sizeHint"></p>
 </div>
 
 <div class="card">

@@ -1,6 +1,6 @@
 // يخزّن ملفات الصفحة ليفتح دون إنترنت، ويضيف ترويسات العزل (COOP/COEP) كي تعمل خيوط WebAssembly المتعددة.
 // النموذج يخزَّن من داخل التطبيق (Cache API: tartil-model).
-const CACHE = 'tartil-app-v2';
+const CACHE = 'tartil-app-v3';
 const FILES = ['./', 'index.html', 'app.js', 'detect.js', 'tracker.js', 'live.js', 'worker.js', 'tartil_ref.json.gz', 'manifest.json'];
 self.addEventListener('install', (e) => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES).catch(() => {}))); });
 self.addEventListener('activate', (e) => {
