@@ -3,11 +3,12 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   const CFG = {
-    modelUrl: 'https://huggingface.co/noubou/tartil-onnx/resolve/main/model.int8.onnx',
+    hfBase: 'https://huggingface.co/noubou/tartil-onnx/resolve/main/',
+    modelUrl: '',  // رابط مخصص (اختياري) يتجاوز اختيار النموذج
     ortBase: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/',
     cache: 'tartil-model', refUrl: 'tartil_ref.json.gz',
   };
-  try { const u = localStorage.getItem('tartil.modelUrl'); if (u) CFG.modelUrl = u; } catch (e) {}
+  try { const u = localStorage.getItem('tartil.modelUrl'); if (u && !/resolve\/main\/model\.int8\.onnx$/.test(u)) CFG.modelUrl = u; } catch (e) {}
   const q = new URLSearchParams(location.search); if (q.get('model')) CFG.modelUrl = q.get('model');
 
   const SURAS = ['الفاتحة','البقرة','آل عمران','النساء','المائدة','الأنعام','الأعراف','الأنفال','التوبة','يونس','هود','يوسف','الرعد','إبراهيم','الحجر','النحل','الإسراء','الكهف','مريم','طه','الأنبياء','الحج','المؤمنون','النور','الفرقان','الشعراء','النمل','القصص','العنكبوت','الروم','لقمان','السجدة','الأحزاب','سبأ','فاطر','يس','الصافات','ص','الزمر','غافر','فصلت','الشورى','الزخرف','الدخان','الجاثية','الأحقاف','محمد','الفتح','الحجرات','ق','الذاريات','الطور','النجم','القمر','الرحمن','الواقعة','الحديد','المجادلة','الحشر','الممتحنة','الصف','الجمعة','المنافقون','التغابن','الطلاق','التحريم','الملك','القلم','الحاقة','المعارج','نوح','الجن','المزمل','المدثر','القيامة','الإنسان','المرسلات','النبأ','النازعات','عبس','التكوير','الانفطار','المطففين','الانشقاق','البروج','الطارق','الأعلى','الغاشية','الفجر','البلد','الشمس','الليل','الضحى','الشرح','التين','العلق','القدر','البينة','الزلزلة','العاديات','القارعة','التكاثر','العصر','الهمزة','الفيل','قريش','الماعون','الكوثر','الكافرون','النصر','المسد','الإخلاص','الفلق','الناس'];
@@ -92,12 +93,21 @@
   }
 
   // ---------- model ----------
-  const KEYS = { cpu: 'local-model-v1', gpu: 'local-model-fp16-v1' };
+  // النماذج: lite12 (الافتراضي، متوازن) · lite8 (أسرع وأقل دقة) · v7 (الأصلي الكامل، أبطأ)
+  const MODELS = { lite12: { dir: 'lite12/', cpuMB: 203, gpuMB: 329 }, lite8: { dir: 'lite8/', cpuMB: 152, gpuMB: 228 }, v7: { dir: '', cpuMB: 355, gpuMB: 632 } };
+  let sel = 'lite12';
+  try { const v = localStorage.getItem('tartil.model'); if (MODELS[v]) sel = v; } catch (e) {}
+  const keyFor = (m) => (sel === 'v7' ? (m === 'gpu' ? 'local-model-fp16-v1' : 'local-model-v1') : 'local-model-' + sel + '-' + m + '-v1');
   let mode = 'cpu';
   try { mode = localStorage.getItem('tartil.mode') === 'gpu' ? 'gpu' : 'cpu'; } catch (e) {}
-  const urlFor = (m) => (m === 'gpu' ? CFG.modelUrl.replace('int8', 'fp16') : CFG.modelUrl);
+  const urlFor = (m) => {
+    if (CFG.modelUrl) return m === 'gpu' ? CFG.modelUrl.replace('int8', 'fp16') : CFG.modelUrl;
+    return CFG.hfBase + MODELS[sel].dir + (m === 'gpu' ? 'model.fp16.onnx' : 'model.int8.onnx');
+  };
+  const gpuLabel = () => 'تجربة وضع GPU (أسرع، نحو ' + MODELS[sel].gpuMB + ' ميغابايت)';
+  const sizeHint = () => { $('sizeHint').textContent = 'يُحمَّل النموذج (نحو ' + MODELS[sel].cpuMB + ' ميغابايت) مرة واحدة ثم يُحفظ في هاتفك.'; };
   async function openCache() { try { return await caches.open(CFG.cache); } catch (e) { return null; } }
-  async function cachedBytes(m) { const c = await openCache(); if (!c) return null; const hit = await c.match(KEYS[m]); return hit ? new Uint8Array(await hit.arrayBuffer()) : null; }
+  async function cachedBytes(m) { const c = await openCache(); if (!c) return null; const hit = await c.match(keyFor(m)); return hit ? new Uint8Array(await hit.arrayBuffer()) : null; }
   async function fetchModel(url, onp) {
     const res = await fetch(url);
     if (!res.ok) throw new Error('تعذّر تنزيل النموذج (HTTP ' + res.status + ')');
@@ -129,12 +139,12 @@
         fresh = true; $('modelState').textContent = 'جارٍ تنزيل النموذج…';
         bytes = await fetchModel(urlFor(m), (g, t) => { $('progBar').style.width = (t ? 100 * g / t : 50) + '%'; $('modelState').textContent = 'جارٍ التنزيل: ' + Math.round(g / 1e6) + (t ? ' / ' + Math.round(t / 1e6) : '') + ' ميغابايت'; });
       }
-      if (fresh || fileBytes) { const c = await openCache(); if (c) { try { await c.put(KEYS[m], new Response(bytes.slice(0))); } catch (e) { /* storage full: continue */ } } }
+      if (fresh || fileBytes) { const c = await openCache(); if (c) { try { await c.put(keyFor(m), new Response(bytes.slice(0))); } catch (e) { /* storage full: continue */ } } }
       $('modelState').textContent = 'جارٍ تهيئة النموذج وتجربته…'; $('progBar').style.width = '100%';
       const r = await startWorker(bytes, m === 'gpu' ? 'webgpu' : 'wasm'); hookWorker();
       mode = m; try { localStorage.setItem('tartil.mode', m); } catch (e) {}
       modelReady = true; $('modelState').textContent = describe(r, m); $('prog').style.display = 'none'; $('loadBtn').style.display = 'none'; $('go').disabled = false;
-      $('gpuBtn').textContent = m === 'gpu' ? 'العودة إلى وضع المعالج' : 'تجربة وضع GPU (أسرع، نحو 630 ميغابايت)';
+      $('gpuBtn').textContent = m === 'gpu' ? 'العودة إلى وضع المعالج' : gpuLabel();
     } catch (e) {
       $('prog').style.display = 'none';
       if (m === 'gpu') { $('modelState').textContent = 'وضع GPU غير متاح على هذا الجهاز (' + e.message + ')، أعود إلى المعالج…'; try { localStorage.setItem('tartil.mode', 'cpu'); } catch (e2) {} await bringUp('cpu'); return; }
@@ -217,6 +227,13 @@
   // ---------- init ----------
   async function init() {
     $('modelUrl').value = CFG.modelUrl;
+    $('modelSel').value = sel; sizeHint(); $('gpuBtn').textContent = gpuLabel();
+    $('modelSel').onchange = () => {
+      sel = $('modelSel').value; try { localStorage.setItem('tartil.model', sel); } catch (e) {}
+      sizeHint(); $('gpuBtn').textContent = gpuLabel(); $('loadBtn').style.display = ''; $('loadBtn').disabled = false;
+      modelReady = false; $('go').disabled = true; if (worker) { worker.terminate(); worker = null; }
+      $('modelState').textContent = 'تم اختيار نموذج آخر — اضغط «تحميل النموذج»';
+    };
     try { await loadRef(); } catch (e) { setStatus(e.message); return; }
     fillSuras(); renderPassage();
     $('sura').onchange = () => { fillAyas(1, REF.counts[+$('sura').value]); renderPassage(); };
@@ -227,7 +244,7 @@
     $('showPos').onchange = () => $('text').parentNode.classList.toggle('hidepos', !$('showPos').checked);
     $('text').onclick = (e) => { const t = e.target.closest('.w'); if (t) showDetail(+t.dataset.i); };
     $('modelUrl').onchange = () => { CFG.modelUrl = $('modelUrl').value.trim(); try { localStorage.setItem('tartil.modelUrl', CFG.modelUrl); } catch (e) {} };
-    $('modelFile').onchange = async (e) => { const f = e.target.files[0]; if (f) { const c = await openCache(); if (c) await c.delete(KEYS.cpu); bringUp('cpu', new Uint8Array(await f.arrayBuffer())); } };
+    $('modelFile').onchange = async (e) => { const f = e.target.files[0]; if (f) { const c = await openCache(); if (c) await c.delete(keyFor('cpu')); bringUp('cpu', new Uint8Array(await f.arrayBuffer())); } };
     $('loadBtn').onclick = () => bringUp(mode);
     $('gpuBtn').onclick = () => bringUp(mode === 'gpu' ? 'cpu' : 'gpu');
     if (!navigator.gpu) $('gpuBtn').style.display = 'none';
