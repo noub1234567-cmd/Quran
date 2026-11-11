@@ -85,6 +85,8 @@
     const conf = fl.filter((f) => f.level === 'confirmed'), pos = fl.filter((f) => f.level !== 'confirmed');
     const st = tracker.wordStates(), seen = st.filter((x) => x !== 'pending').length;
     $('summary').innerHTML = '<p>غُطّيت ' + seen + ' كلمة من ' + st.length + ' — أخطاء مؤكدة: <b>' + conf.length + '</b> — محتملة: ' + pos.length + '</p>' + (conf.length ? '' : '<p>لا أخطاء مؤكدة. ما شاء الله.</p>');
+    const aud = segLog.reduce((a, x) => a + x.sec, 0), tot = procMs / 1000;
+    if (segLog.length) $('summary').innerHTML += '<p dir="rtl" style="font-size:13px;color:var(--mut,#666)">⏱ ' + (sel + ' — ' + (mode === 'gpu' ? 'GPU' : 'المعالج')) + ': مدة الصوت <b>' + aud.toFixed(1) + ' ث</b>، زمن التحليل <b>' + tot.toFixed(1) + ' ث</b> (×' + (aud ? (tot / aud).toFixed(2) : '–') + ' من زمن الصوت)<br>المقاطع: ' + segLog.map((x, i) => (i + 1) + ') ' + x.sec.toFixed(1) + ' ث ← ' + (x.ms / 1000).toFixed(1) + ' ث').join(' · ') + '</p>';
     $('report').innerHTML = conf.concat(pos).map((f) => {
       const what = f.kind === 'sub' ? 'سُمع «' + ph(f.heard) + '» بدل «' + ph(f.ref) + '»' : 'لم يُسمع «' + ph(f.ref) + '»';
       const tg = f.tags.filter((t) => TG[t]).map((t) => '<span class="tag">' + TG[t] + '</span>').join('');
@@ -167,11 +169,12 @@
   }
 
   // ---------- segments ----------
+  let segLog = [];
   async function handleSegment(samples) {
     const sec = samples.length / 16000;
     const m = await runModel(new Float32Array(samples));
     const r = tracker.process(m.logp, m.T, m.V);
-    segCount++; procMs += m.ms;
+    segCount++; procMs += m.ms; segLog.push({ sec, ms: m.ms });
     const msg = { ok: 'حُلّل مقطع (' + sec.toFixed(1) + ' ث في ' + (m.ms / 1000).toFixed(1) + ' ث)', lost: 'لم أتعرّف على هذا المقطع ضمن الآيات المحددة', unreliable: 'المقطع غير واضح أو لا يطابق النص', short: 'مقطع قصير جدًا' }[r.status];
     setStatus(msg); paint();
     if (tracker.done && running) setTimeout(stop, 300);
@@ -180,7 +183,7 @@
 
   async function start() {
     if (running) return;
-    renderPassage(); segCount = 0; procMs = 0; hookWorker();
+    renderPassage(); segCount = 0; procMs = 0; segLog = []; hookWorker();
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 } }); }
     catch (e) { setStatus('لا يمكن الوصول إلى الميكروفون: أعطِ الإذن من إعدادات المتصفح'); return; }
     try {
@@ -204,7 +207,7 @@
   // ---------- analyse a recorded file ----------
   async function analyseFile(file) {
     if (!modelReady) { setStatus('حمّل النموذج أولًا'); return; }
-    renderPassage(); hookWorker(); segCount = 0; lock(true); $('go').disabled = true;
+    renderPassage(); hookWorker(); segCount = 0; procMs = 0; segLog = []; lock(true); $('go').disabled = true;
     try {
       setStatus('جارٍ قراءة الملف…');
       const AC = window.AudioContext || window.webkitAudioContext, ac = new AC();
