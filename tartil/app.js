@@ -97,7 +97,7 @@
   // ---------- model ----------
   // النماذج: lite12 (الافتراضي، متوازن) · lite8 (أسرع وأقل دقة) · v7 (الأصلي الكامل، أبطأ)
   const MODELS = { lite12b: { dir: 'lite12b/', cpuMB: 203, gpuMB: 329 }, lite12: { dir: 'lite12/', cpuMB: 203, gpuMB: 329 }, lite8: { dir: 'lite8/', cpuMB: 152, gpuMB: 228 }, v7: { dir: '', cpuMB: 355, gpuMB: 632 } };
-  let sel = 'lite12';
+  let sel = 'lite12b';
   try { const v = localStorage.getItem('tartil.model'); if (MODELS[v]) sel = v; } catch (e) {}
   const keyFor = (m) => (sel === 'v7' ? (m === 'gpu' ? 'local-model-fp16-v1' : 'local-model-v1') : 'local-model-' + sel + '-' + m + '-v1');
   let mode = 'cpu';
