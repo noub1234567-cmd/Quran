@@ -38,6 +38,7 @@ button:disabled{opacity:.45}
 #text{font-family:'Amiri Quran','Amiri','Scheherazade New',serif;font-size:var(--fs,28px);line-height:2.4;text-align:right}
 .w{padding:0 2px;border-radius:6px;cursor:default}
 .st-pending{color:var(--ink)}
+.st-skipped{color:var(--err);background:var(--errbg);text-decoration:underline dotted}
 .st-partial{color:var(--part)}
 .st-ok{color:var(--ok);background:var(--okbg)}
 .st-possible{color:var(--pos);background:var(--posbg)}
@@ -58,7 +59,7 @@ details summary{cursor:pointer;color:var(--brand);font-size:14px}
 </style>
 </head>
 <body>
-<header>ترتيل<small>يستمع أثناء قراءتك ويقارن بالمصحف — على جهازك بلا إنترنت · نسخة 7</small></header>
+<header>ترتيل<small>يستمع أثناء قراءتك ويقارن بالمصحف — على جهازك بلا إنترنت · نسخة 8</small></header>
 
 <div class="card" id="modelCard">
   <h2>النموذج</h2>
@@ -87,7 +88,7 @@ details summary{cursor:pointer;color:var(--brand);font-size:14px}
 
 <div class="card">
   <div id="text"></div>
-  <div class="legend"><span><b class="st-ok">صحيح</b></span><span><b class="st-error">خطأ مؤكد</b></span><span><b class="st-possible">محتمل</b></span><span><b class="st-partial">قيد التحليل</b></span></div>
+  <div class="legend"><span><b class="st-ok">صحيح</b></span><span><b class="st-error">خطأ مؤكد</b></span><span><b class="st-skipped">أُسقطت</b></span><span><b class="st-possible">محتمل</b></span><span><b class="st-partial">قيد التحليل</b></span></div>
   <label class="tog"><input type="checkbox" id="memo"> وضع الحفظ (إخفاء النص؛ تظهر الكلمة عند قراءتها أو بلمسها)</label>
   <label class="tog"><input type="checkbox" id="showPos" checked> أظهر الأخطاء المحتملة</label>
   <div id="detail"></div>

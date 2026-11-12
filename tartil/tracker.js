@@ -5,7 +5,7 @@
  *   const pass = TartilTracker.buildPassage(refData, sura, from, to);
  *   const tr = TartilTracker.create(pass, refData.vocab);
  *   const r = tr.process(logp, T, V);   // -> {status:'ok'|'lost'|'unreliable'|'short', start, end, flags}
- *   tr.wordStates()                     // per word: 'pending' | 'partial' | 'ok' | 'possible' | 'error'
+ *   tr.wordStates()                     // per word: 'pending' | 'skipped' | 'partial' | 'ok' | 'possible' | 'error'
  */
 (function (root, factory) {
   const api = factory(root.TartilDetect || (typeof require === 'function' ? require('./detect.js') : null));
@@ -90,10 +90,12 @@
     }
 
     function wordStates() {
-      return pass.wordRange.map(([a, b]) => {
+      let last = -1;   // آخر كلمة غُطّي منها شيء: ما قبلها وغير مغطّى = أُسقط
+      pass.wordRange.forEach(([a, b], i) => { for (let j = a; j <= b; j++) if (covered[j]) { last = i; break; } });
+      return pass.wordRange.map(([a, b], i) => {
         let c = 0, sv = 0;
         for (let j = a; j <= b; j++) { c += covered[j]; if (sev[j] > sv) sv = sev[j]; }
-        if (!c) return 'pending';
+        if (!c) return i < last ? 'skipped' : 'pending';
         if (c < b - a + 1) return 'partial';
         return sv === 2 ? 'error' : sv === 1 ? 'possible' : 'ok';
       });
