@@ -43,6 +43,7 @@ button:disabled{opacity:.45}
 .st-possible{color:var(--pos);background:var(--posbg)}
 .st-error{color:var(--err);background:var(--errbg);font-weight:700;cursor:pointer}
 .st-possible.hasflag{cursor:pointer}
+.memo{color:transparent!important;background:var(--line)!important;cursor:pointer}
 .hidepos .st-possible{color:var(--ok);background:var(--okbg);cursor:default}
 .vn{font-family:system-ui;font-size:.5em;color:var(--mute);margin:0 4px}
 .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}
@@ -57,7 +58,7 @@ details summary{cursor:pointer;color:var(--brand);font-size:14px}
 </style>
 </head>
 <body>
-<header>ترتيل<small>يستمع أثناء قراءتك ويقارن بالمصحف — على جهازك بلا إنترنت · نسخة 6</small></header>
+<header>ترتيل<small>يستمع أثناء قراءتك ويقارن بالمصحف — على جهازك بلا إنترنت · نسخة 7</small></header>
 
 <div class="card" id="modelCard">
   <h2>النموذج</h2>
@@ -87,11 +88,14 @@ details summary{cursor:pointer;color:var(--brand);font-size:14px}
 <div class="card">
   <div id="text"></div>
   <div class="legend"><span><b class="st-ok">صحيح</b></span><span><b class="st-error">خطأ مؤكد</b></span><span><b class="st-possible">محتمل</b></span><span><b class="st-partial">قيد التحليل</b></span></div>
+  <label class="tog"><input type="checkbox" id="memo"> وضع الحفظ (إخفاء النص؛ تظهر الكلمة عند قراءتها أو بلمسها)</label>
   <label class="tog"><input type="checkbox" id="showPos" checked> أظهر الأخطاء المحتملة</label>
   <div id="detail"></div>
 </div>
 
 <div class="card" id="reportCard" style="display:none"><h2>التقرير</h2><div id="summary"></div><div id="report"></div></div>
+
+<div class="card"><h2>أخطائي</h2><div id="mkList"></div><button id="mkClear" class="full">مسح القائمة</button><p class="hint">تُحفظ في هاتفك فقط: الأخطاء المؤكدة (الحركات) المتكررة عبر جلساتك.</p></div>
 
 <div id="bar"><div id="status">اختر المقطع ثم اضغط ابدأ</div><button id="go" class="primary" disabled>ابدأ</button></div>
 <script src="detect.js"></script>
