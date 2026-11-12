@@ -65,10 +65,38 @@
     box.appendChild(frag);
     setStatus('جاهز. اضغط ابدأ ثم اقرأ.');
   }
+  // المستوى أ: استبدال حركة قصيرة مؤكد فقط يُعرض «خطأ مؤكد»؛ غيره «ملاحظة محتملة»
+  const suraNow = () => +$('sura').value;
+  const SV = ['a', 'i', 'u'];
+  const tierA = (f) => f.level === 'confirmed' && f.kind === 'sub' && SV.includes(f.ref) && SV.includes(f.heard);
+  const MK = 'tartil.mistakes';
+  const loadMK = () => { try { return JSON.parse(localStorage.getItem(MK) || '{}'); } catch (e) { return {}; } };
+  const saveMK = (o) => { try { localStorage.setItem(MK, JSON.stringify(o)); } catch (e) {} };
+  let memo = false; try { memo = localStorage.getItem('tartil.memo') === '1'; } catch (e) {}
+  function recordMistakes(fl) {
+    const o = loadMK(), seen = new Set();
+    fl.filter(tierA).forEach((f) => {
+      const k = suraNow() + ':' + pass.wordVerse[f.word] + ':' + pass.words[f.word];
+      if (seen.has(k)) return; seen.add(k);
+      const e = o[k] || (o[k] = { w: pass.words[f.word], s: suraNow(), v: pass.wordVerse[f.word], n: 0, what: '' });
+      e.n++; e.what = (f.kind === 'sub' ? 'سُمع «' + ph(f.heard) + '» بدل «' + ph(f.ref) + '»' : ''); e.t = Date.now();
+    });
+    saveMK(o);
+  }
+  function showMistakes() {
+    const o = loadMK(), arr = Object.values(o).sort((x, y) => y.n - x.n || y.t - x.t).slice(0, 30);
+    const box = $('mkList');
+    box.innerHTML = arr.length ? arr.map((e) => '<div class="item"><span class="big">' + e.w + '</span> — سورة ' + e.s + ' آية ' + e.v + ' — تكرر <b>' + e.n + '</b><br>' + e.what + '</div>').join('') : '<p class="hint">لا أخطاء مؤكدة محفوظة بعد.</p>';
+  }
   function paint() {
     const st = tracker.wordStates(), el = $('text').querySelectorAll('.w');
-    const bad = new Set(tracker.allFlags().map((f) => f.word));
-    el.forEach((e, i) => { const c = 'w st-' + st[i] + (bad.has(i) ? ' hasflag' : ''); if (e.className !== c) e.className = c; });
+    const fls = tracker.allFlags(), bad = new Set(fls.map((f) => f.word)), conf = new Set(fls.filter(tierA).map((f) => f.word));
+    el.forEach((e, i) => {
+      let s = st[i]; if (s === 'error' && !conf.has(i)) s = 'possible';
+      const hide = memo && (s === 'pending' || s === 'partial') && !e.classList.contains('rev');
+      const c = 'w st-' + s + (bad.has(i) ? ' hasflag' : '') + (hide ? ' memo' : '') + (e.classList.contains('rev') ? ' rev' : '');
+      if (e.className !== c) e.className = c;
+    });
   }
   function showDetail(i) {
     const fl = tracker.allFlags().filter((f) => f.word === i); const d = $('detail');
@@ -77,20 +105,20 @@
     d.innerHTML = '<div class="big">' + pass.words[i] + '</div>' + fl.map((f) => {
       const what = f.kind === 'sub' ? 'سُمع «' + ph(f.heard) + '» بدل «' + ph(f.ref) + '»' : 'لم يُسمع «' + ph(f.ref) + '»';
       const tg = f.tags.filter((t) => TG[t]).map((t) => '<span class="tag">' + TG[t] + '</span>').join('');
-      return '<div>' + (f.level === 'confirmed' ? '✗ ' : '؟ ') + what + (f.level === 'confirmed' ? '' : ' (محتمل)') + tg + '</div>';
+      return '<div>' + (tierA(f) ? '✗ ' : '؟ ') + what + (tierA(f) ? '' : ' (محتمل — راجع الكلمة)') + tg + '</div>';
     }).join('');
   }
   function report() {
     const fl = tracker.allFlags(); $('reportCard').style.display = 'block';
-    const conf = fl.filter((f) => f.level === 'confirmed'), pos = fl.filter((f) => f.level !== 'confirmed');
+    const conf = fl.filter(tierA), pos = fl.filter((f) => !tierA(f)); recordMistakes(fl); showMistakes();
     const st = tracker.wordStates(), seen = st.filter((x) => x !== 'pending').length;
-    $('summary').innerHTML = '<p>غُطّيت ' + seen + ' كلمة من ' + st.length + ' — أخطاء مؤكدة: <b>' + conf.length + '</b> — محتملة: ' + pos.length + '</p>' + (conf.length ? '' : '<p>لا أخطاء مؤكدة. ما شاء الله.</p>');
+    $('summary').innerHTML = '<p>غُطّيت ' + seen + ' كلمة من ' + st.length + ' — أخطاء حركات مؤكدة: <b>' + conf.length + '</b> — ملاحظات محتملة: ' + pos.length + '</p>' + (conf.length ? '' : '<p>لا أخطاء حركات مؤكدة. ما شاء الله.</p>');
     const aud = segLog.reduce((a, x) => a + x.sec, 0), tot = procMs / 1000;
     if (segLog.length) $('summary').innerHTML += '<p dir="rtl" style="font-size:13px;color:var(--mut,#666)">⏱ ' + (sel + ' — ' + (mode === 'gpu' ? 'GPU' : 'المعالج')) + ': مدة الصوت <b>' + aud.toFixed(1) + ' ث</b>، زمن التحليل <b>' + tot.toFixed(1) + ' ث</b> (×' + (aud ? (tot / aud).toFixed(2) : '–') + ' من زمن الصوت)<br>المقاطع: ' + segLog.map((x, i) => (i + 1) + ') ' + x.sec.toFixed(1) + ' ث ← ' + (x.ms / 1000).toFixed(1) + ' ث').join(' · ') + '</p>';
     $('report').innerHTML = conf.concat(pos).map((f) => {
       const what = f.kind === 'sub' ? 'سُمع «' + ph(f.heard) + '» بدل «' + ph(f.ref) + '»' : 'لم يُسمع «' + ph(f.ref) + '»';
       const tg = f.tags.filter((t) => TG[t]).map((t) => '<span class="tag">' + TG[t] + '</span>').join('');
-      return '<div class="item"><span class="big">' + pass.words[f.word] + '</span> — آية ' + pass.wordVerse[f.word] + '<br>' + (f.level === 'confirmed' ? '✗ ' : '؟ ') + what + (f.level === 'confirmed' ? '' : ' (محتمل)') + tg + '</div>';
+      return '<div class="item"><span class="big">' + pass.words[f.word] + '</span> — آية ' + pass.wordVerse[f.word] + '<br>' + (tierA(f) ? '✗ ' : '؟ ') + what + (tierA(f) ? '' : ' (محتمل — راجع الكلمة)') + tg + '</div>';
     }).join('');
   }
 
@@ -245,7 +273,11 @@
     $('fileBtn').onclick = () => $('audioFile').click();
     $('audioFile').onchange = (e) => { const f = e.target.files[0]; if (f) analyseFile(f); e.target.value = ''; };
     $('showPos').onchange = () => $('text').parentNode.classList.toggle('hidepos', !$('showPos').checked);
-    $('text').onclick = (e) => { const t = e.target.closest('.w'); if (t) showDetail(+t.dataset.i); };
+    $('text').onclick = (e) => { const t = e.target.closest('.w'); if (t) { if (t.classList.contains('memo')) { t.classList.add('rev'); paint(); } showDetail(+t.dataset.i); } };
+    $('memo').checked = memo;
+    $('memo').onchange = () => { memo = $('memo').checked; try { localStorage.setItem('tartil.memo', memo ? '1' : '0'); } catch (e) {} $('text').querySelectorAll('.w').forEach((x) => x.classList.remove('rev')); paint(); };
+    $('mkClear').onclick = () => { if (confirm('مسح قائمة أخطائي؟')) { saveMK({}); showMistakes(); } };
+    showMistakes();
     $('modelUrl').onchange = () => { CFG.modelUrl = $('modelUrl').value.trim(); try { localStorage.setItem('tartil.modelUrl', CFG.modelUrl); } catch (e) {} };
     $('modelFile').onchange = async (e) => { const f = e.target.files[0]; if (f) { const c = await openCache(); if (c) await c.delete(keyFor('cpu')); bringUp('cpu', new Uint8Array(await f.arrayBuffer())); } };
     $('loadBtn').onclick = () => bringUp(mode);
