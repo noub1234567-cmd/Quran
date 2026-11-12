@@ -92,7 +92,7 @@
     const st = tracker.wordStates(), el = $('text').querySelectorAll('.w');
     const fls = tracker.allFlags(), bad = new Set(fls.map((f) => f.word)), conf = new Set(fls.filter(tierA).map((f) => f.word));
     el.forEach((e, i) => {
-      let s = st[i]; if (s === 'error' && !conf.has(i)) s = 'possible';
+      let s = st[i]; if (s === 'skipped' && running) s = 'pending'; if (s === 'error' && !conf.has(i)) s = 'possible';
       const hide = memo && (s === 'pending' || s === 'partial') && !e.classList.contains('rev');
       const c = 'w st-' + s + (bad.has(i) ? ' hasflag' : '') + (hide ? ' memo' : '') + (e.classList.contains('rev') ? ' rev' : '');
       if (e.className !== c) e.className = c;
@@ -115,7 +115,10 @@
     $('summary').innerHTML = '<p>غُطّيت ' + seen + ' كلمة من ' + st.length + ' — أخطاء حركات مؤكدة: <b>' + conf.length + '</b> — ملاحظات محتملة: ' + pos.length + '</p>' + (conf.length ? '' : '<p>لا أخطاء حركات مؤكدة. ما شاء الله.</p>');
     const aud = segLog.reduce((a, x) => a + x.sec, 0), tot = procMs / 1000;
     if (segLog.length) $('summary').innerHTML += '<p dir="rtl" style="font-size:13px;color:var(--mut,#666)">⏱ ' + (sel + ' — ' + (mode === 'gpu' ? 'GPU' : 'المعالج')) + ': مدة الصوت <b>' + aud.toFixed(1) + ' ث</b>، زمن التحليل <b>' + tot.toFixed(1) + ' ث</b> (×' + (aud ? (tot / aud).toFixed(2) : '–') + ' من زمن الصوت)<br>المقاطع: ' + segLog.map((x, i) => (i + 1) + ') ' + x.sec.toFixed(1) + ' ث ← ' + (x.ms / 1000).toFixed(1) + ' ث').join(' · ') + '</p>';
-    $('report').innerHTML = conf.concat(pos).map((f) => {
+    const sk = []; st.forEach((x, i) => { if (x !== 'skipped') return; const l = sk[sk.length - 1]; if (l && l.b === i - 1 && l.v === pass.wordVerse[i]) l.b = i; else sk.push({ a: i, b: i, v: pass.wordVerse[i] }); });
+    const skN = sk.reduce((s, r) => s + r.b - r.a + 1, 0);
+    if (skN) $('summary').innerHTML += '<p style="color:var(--err)"><b>كلمات أُسقطت: ' + skN + '</b></p>';
+    $('report').innerHTML = sk.map((r) => '<div class="item"><span class="big" style="color:var(--err)">' + pass.words.slice(r.a, r.b + 1).join(' ') + '</span> — آية ' + r.v + '<br><span style="color:var(--err)">✗ أُسقطت ' + (r.b > r.a ? 'هذه الكلمات' : 'هذه الكلمة') + ' من القراءة</span></div>').join('') + conf.concat(pos).map((f) => {
       const what = f.kind === 'sub' ? 'سُمع «' + ph(f.heard) + '» بدل «' + ph(f.ref) + '»' : 'لم يُسمع «' + ph(f.ref) + '»';
       const tg = f.tags.filter((t) => TG[t]).map((t) => '<span class="tag">' + TG[t] + '</span>').join('');
       return '<div class="item"><span class="big">' + pass.words[f.word] + '</span> — آية ' + pass.wordVerse[f.word] + '<br>' + (tierA(f) ? '✗ ' : '؟ ') + what + (tierA(f) ? '' : ' (محتمل — راجع الكلمة)') + tg + '</div>';
