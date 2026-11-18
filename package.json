@@ -1,0 +1,13 @@
+{
+  "name": "hifz-quran-apk",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Android wrapper (Capacitor) for the Quran memorisation web app",
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0"
+  }
+}
