@@ -352,6 +352,16 @@
       <div><label for="wspeed">السرعة</label>
         <select id="wspeed"><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option></select></div>
     </div>
+    <div id="wAdjBox" hidden>
+      <label for="wbsmadj">ضبط قص البسملة (ثوانٍ)</label>
+      <div class="row" style="align-items:center">
+        <button class="alt" id="wadjm" style="flex:none;width:52px">−</button>
+        <input id="wbsmadj" type="number" step="0.1" value="0">
+        <button class="alt" id="wadjp" style="flex:none;width:52px">+</button>
+        <button class="alt" id="wadjtest" style="flex:none">جرّب</button>
+      </div>
+      <p class="hint">عند هذا القارئ تأتي البسملة داخل تسجيل الآية الأولى. تُسمع مرة واحدة في أول التكرار، ثم يُقفز عنها في الدورات التالية. إن بقي جزء منها فزد القيمة (+)، وإن ضاع بعض أول الآية فأنقصها (−). زر «جرّب» يشغّل الآية الأولى بعد القص.</p>
+    </div>
     <button class="primary" id="wgo">▶ ابدأ التكرار</button>
     <button class="alt" id="wdl" style="width:100%;margin-top:8px">⬇ تحميل هذه السورة</button>
     <p class="hint" id="wDlInfo"></p>
@@ -1824,12 +1834,14 @@ document.addEventListener('click',async e=>{
 // ---- نهاية الروايات ----
 
 // ---- شاشة ورش المستقلة ----
+// bsmIn: القارئ تأتي البسملة داخل تسجيل الآية الأولى من كل سورة (عدا الفاتحة والتوبة)
 const WARSH_RECS=[
   {id:'w.dosary',name:'إبراهيم الدوسري (ورش)',style:'مرتّل',cdn:false,ev:['warsh/warsh_ibrahim_aldosary_128kbps']},
-  {id:'w.jazaery',name:'ياسين الجزائري (ورش)',style:'مرتّل',cdn:false,ev:['warsh/warsh_yassin_al_jazaery_64kbps']},
+  {id:'w.jazaery',name:'ياسين الجزائري (ورش)',style:'مرتّل',cdn:false,bsmIn:true,ev:['warsh/warsh_yassin_al_jazaery_64kbps']},
   {id:'w.basit',name:'عبد الباسط (ورش) — ملفاته ناقصة',style:'مرتّل',cdn:false,ev:['warsh/warsh_Abdul_Basit_128kbps']}
 ];
-let wcfg=Object.assign({rec:'w.dosary',gap:'0',speed:'1',mode:'norm',reps:'10',txt:'show',num:'hafs',last:null},load('wcfg',{}));
+let wcfg=Object.assign({rec:'w.dosary',gap:'0',speed:'1',mode:'norm',reps:'10',txt:'show',num:'hafs',last:null,adj:{}},load('wcfg',{}));
+if(!wcfg.adj||typeof wcfg.adj!=='object')wcfg.adj={};
 const wRec=()=>WARSH_RECS.find(r=>r.id===wcfg.rec)||WARSH_RECS[0];
 const wDlKey=id=>'dl_'+id;
 const wData=()=>(wcfg.num==='hafs'&&RWDATA.warshH)?RWDATA.warshH:(RWDATA.warsh||null);
@@ -1887,7 +1899,8 @@ function wRefreshDl(){
   $('wDlInfo').textContent='سور ورش المحمّلة لهذا القارئ: '+set.size;
 }
 function applySpeedW(){const r=+$('wspeed').value||1;player.defaultPlaybackRate=r;player.playbackRate=r;}
-function playAyahR(R,sn,a){
+// startAt: ثوانٍ يبدأ منها التشغيل (لقفز بسملة مدمجة في الآية الأولى)
+function playAyahR(R,sn,a,startAt){
   return new Promise(async res=>{
     pendingResolve=res;
     const S=sourcesFor(R),key=S[0](sn,a);let obj=null;const srcs=[];
@@ -1897,23 +1910,60 @@ function playAyahR(R,sn,a){
     }catch(e){}
     for(let i=0;i<S.length;i++)srcs.push(S[i](sn,a));
     let k=0;
-    const finish=v=>{player.onended=player.onerror=null;if(obj)URL.revokeObjectURL(obj);pendingResolve=null;res(v);};
+    const finish=v=>{player.onended=player.onerror=player.onloadedmetadata=null;if(obj)URL.revokeObjectURL(obj);pendingResolve=null;res(v);};
     const tryNext=()=>{
       if(k>=srcs.length)return finish(false);
       player.onended=()=>finish(true);
       player.onerror=()=>{k++;tryNext();};
+      player.onloadedmetadata=null;
+      if(startAt>0){const st=startAt;player.onloadedmetadata=()=>{try{player.currentTime=st;}catch(e){}player.onloadedmetadata=null;};}
       player.src=srcs[k];applySpeedW();
       player.play().catch(()=>{k++;tryNext();});
     };
     tryNext();
   });
 }
-async function wPass(R,sn,a1,a2,my,label){
+// مدة ملف صوتي بالثواني (0 إن تعذّر القياس)
+async function wAudioDur(R,sn,a){
+  const S=sourcesFor(R),srcs=[];let obj=null;
+  try{
+    const c=await caches.open(CACHE_NAME),hit=await c.match(S[0](sn,a));
+    if(hit){obj=URL.createObjectURL(await hit.blob());srcs.push(obj);}
+  }catch(e){}
+  S.forEach(f=>srcs.push(f(sn,a)));
+  let out=0;
+  for(const u of srcs){
+    const d=await new Promise(res=>{
+      const a2=new Audio();
+      const t=setTimeout(()=>res(0),9000);
+      a2.preload='metadata';
+      a2.onloadedmetadata=()=>{clearTimeout(t);res(isFinite(a2.duration)?a2.duration:0);};
+      a2.onerror=()=>{clearTimeout(t);res(0);};
+      a2.src=u;
+    });
+    if(d>0){out=d;break;}
+  }
+  if(obj)URL.revokeObjectURL(obj);
+  return out;
+}
+const wGetAdj=()=>{const v=wcfg.adj[wRec().id];return typeof v==='number'?v:0;};
+function wSetAdj(v){
+  v=Math.round(v*10)/10;
+  wcfg.adj[wRec().id]=v;wSave();
+  $('wbsmadj').value=v.toFixed(1);
+}
+function wAdjUI(){
+  const R=wRec();
+  $('wAdjBox').hidden=!R.bsmIn;
+  $('wbsmadj').value=wGetAdj().toFixed(1);
+}
+// skipFirst: ثوانٍ تُقفز من بداية الآية الأولى (تُستعمل لقص البسملة المدمجة في الدورات التالية)
+async function wPass(R,sn,a1,a2,my,label,skipFirst){
   for(let a=a1;a<=a2;a++){
     if(my!==token)return false;
     wHighlight(a);
     statusEl.textContent='ورش · '+NAMES[sn-1]+' · آية '+a+(label?' · '+label:'');
-    const ok=await playAyahR(R,sn,a);
+    const ok=await playAyahR(R,sn,a,(a===1&&a1===1)?(skipFirst||0):0);
     if(my!==token)return false;
     if(!ok){statusEl.textContent='تعذّر تشغيل صوت ورش لهذه الآية (قد لا يوجد ملف بهذا الرقم). جرّب «فحص الترقيم».';return false;}
     const g=$('wgap').value;
@@ -1927,26 +1977,38 @@ async function wPass(R,sn,a1,a2,my,label){
   }
   return true;
 }
-// البسملة تُقرأ مرة واحدة فقط قبل بدء التكرار (ملف 001001 عند القارئ هو صوت البسملة)
+// البسملة المنفصلة (ملف 001001) تُقرأ مرة واحدة قبل بدء التكرار
 async function wBsmFirst(R,sn,from,my){
   if(!wNeedsBsm(sn,from))return my===token;
   statusEl.textContent='ورش · '+NAMES[sn-1]+' · البسملة';
-  await playAyahR(R,1,1);
+  await playAyahR(R,1,1,0);
   return my===token;
 }
 async function wRun(sn,from,to,reps){
   stop();const my=token,R=wRec();
   wcfg.last={s:sn,a:from,to,reps};wSave();
   wRenderText();
-  if(!(await wBsmFirst(R,sn,from,my)))return;
+  // قارئ بسملته داخل تسجيل الآية الأولى: تُسمع مرة واحدة في أول التكرار ثم تُقفز
+  const embedded=!!R.bsmIn&&sn!==1&&sn!==9&&from===1;
+  let skip=0;
+  if(embedded){
+    statusEl.textContent='ورش · جارٍ تحديد موضع البسملة...';
+    const bd=await wAudioDur(R,1,1);
+    if(my!==token)return;
+    if(bd>0)skip=Math.max(0,bd+wGetAdj());
+    else statusEl.textContent='تعذّر قياس مدة البسملة، وستُسمع مع كل تكرار';
+  }else if(!(await wBsmFirst(R,sn,from,my)))return;
   const cum=$('wmode').value==='cum'&&to>from;
   if(!cum){
-    for(let r=1;r<=reps;r++){if(!(await wPass(R,sn,from,to,my,'المرة '+r+' من '+reps)))return;}
+    for(let r=1;r<=reps;r++){
+      if(!(await wPass(R,sn,from,to,my,'المرة '+r+' من '+reps,r===1?0:skip)))return;
+    }
   }else{
     const st=cumStages(from,to);
     for(let i=0;i<st.length;i++){
       for(let r=1;r<=reps;r++){
-        if(!(await wPass(R,sn,st[i][0],st[i][1],my,'المرحلة '+(i+1)+' من '+st.length+' · المرة '+r+' من '+reps)))return;
+        const first=(i===0&&r===1);
+        if(!(await wPass(R,sn,st[i][0],st[i][1],my,'المرحلة '+(i+1)+' من '+st.length+' · المرة '+r+' من '+reps,first?0:skip)))return;
       }
     }
   }
@@ -2022,6 +2084,8 @@ async function wCheck(list,btn){
 const RISAN='https://quran-json.risanb.com/text/warsh/chapters/';
 const wordsOfV=t=>String(t).split(/\s+/).filter(Boolean);
 const isArTok=w=>/[\u0621-\u064A\u0671-\u06D3]/.test(w);
+// عدد حروف الكلمة (بعد حذف التشكيل) مع احتساب الألف الخنجرية حرفاً
+const lcount=t=>{const s=String(t);return norm(s).replace(/[^\u0621-\u064A]/g,'').length+(s.match(/\u0670/g)||[]).length;};
 function parseMapChapter(j){
   const vs=Array.isArray(j)?j:(j&&(j.verses||(j.chapter&&j.chapter.verses)||(j.data&&j.data.verses)));
   if(!Array.isArray(vs))return null;
@@ -2037,6 +2101,7 @@ function parseMapChapter(j){
   return out.every(Boolean)?out:null;
 }
 // يقطّع كلمات ورش (آياته بترقيمه) عند حدود آيات حفص. يرجع {ok,verses} أو {ok:false,why}
+// المطابقة بعدد الكلمات أولاً؛ وإن اختلفت (تقسيم كلمات مختلف) فبعدد الحروف.
 function cutSurah(s,wv,hv,mp){
   if(s===1&&wv.length){
     const tk=wordsOfV(wv[0]);
@@ -2053,18 +2118,34 @@ function cutSurah(s,wv,hv,mp){
   }
   const verses=new Array(nH).fill(null);
   for(const g of groups){
+    // الفاتحة: آية حفص الأولى هي البسملة، وليس في ورش مقابل لها
+    if(s===1&&g.lo===1)g.lo=2;
+    if(g.lo>g.hi)continue;
     const tokens=[];g.w.forEach(i=>wordsOfV(wv[i]).forEach(t=>tokens.push(t)));
     const A=tokens.filter(isArTok).length;
     const hc=[];let sum=0;
     for(let h=g.lo;h<=g.hi;h++){const c=wordsOfV(hv[h-1]).filter(isArTok).length;hc.push(c);sum+=c;}
-    if(sum!==A)return {ok:false,why:'عدد الكلمات لا يتطابق عند '+g.lo+'–'+g.hi+' ('+A+' مقابل '+sum+')'};
-    let p=0;
-    for(let h=g.lo;h<=g.hi;h++){
-      let need=hc[h-g.lo];const part=[];
-      while(need>0&&p<tokens.length){const t=tokens[p++];part.push(t);if(isArTok(t))need--;}
-      verses[h-1]=part;
+    let parts=[],p=0;
+    if(sum===A){
+      for(let h=g.lo;h<=g.hi;h++){
+        let need=hc[h-g.lo];const part=[];
+        while(need>0&&p<tokens.length){const t=tokens[p++];part.push(t);if(isArTok(t))need--;}
+        parts.push(part);
+      }
+    }else{
+      const tl=tokens.map(lcount),tot=tl.reduce((x,y)=>x+y,0);
+      const hl=[];let hs=0;
+      for(let h=g.lo;h<=g.hi;h++){const c=wordsOfV(hv[h-1]).reduce((x,t)=>x+lcount(t),0);hl.push(c);hs+=c;}
+      if(hs!==tot)return {ok:false,why:'عدد الكلمات لا يتطابق عند '+g.lo+'–'+g.hi+' ('+A+' مقابل '+sum+') وكذلك عدد الحروف ('+tot+' مقابل '+hs+')'};
+      for(let i=0;i<hl.length;i++){
+        let need=hl[i];const part=[];
+        while(need>0&&p<tokens.length){need-=tl[p];part.push(tokens[p++]);}
+        if(need!==0)return {ok:false,why:'حد آية حفص '+(g.lo+i)+' يقع داخل كلمة'};
+        parts.push(part);
+      }
     }
-    while(p<tokens.length)verses[g.hi-1].push(tokens[p++]);
+    while(p<tokens.length)parts[parts.length-1].push(tokens[p++]);
+    for(let h=g.lo;h<=g.hi;h++)verses[h-1]=parts[h-g.lo];
   }
   for(let h=1;h<=nH;h++){
     if(verses[h-1])continue;
@@ -2143,7 +2224,7 @@ async function wInit(){
     WARSH_RECS.forEach(r=>{const o=document.createElement('option');o.value=r.id;o.textContent=r.name;$('wrec').appendChild(o);});
     NAMES.forEach((n,i)=>{const o=document.createElement('option');o.value=i+1;o.textContent=(i+1)+' - '+n;$('wsurah').appendChild(o);});
     $('wrec').value=wcfg.rec;$('wnum').value=wcfg.num;$('wgap').value=wcfg.gap;$('wspeed').value=wcfg.speed;$('wmode').value=wcfg.mode;$('wreps').value=wcfg.reps;$('wtxt').value=wcfg.txt;
-    $('wrec').onchange=()=>{wcfg.rec=$('wrec').value;wSave();wRefreshDl();};
+    $('wrec').onchange=()=>{wcfg.rec=$('wrec').value;wSave();wRefreshDl();wAdjUI();};
     $('wnum').onchange=()=>{wcfg.num=$('wnum').value;wSave();wSetRange(+$('wsurah').value);wRenderText();wRefreshDl();wNumUpdate();};
     $('wgap').onchange=()=>{wcfg.gap=$('wgap').value;wSave();};
     $('wspeed').onchange=()=>{wcfg.speed=$('wspeed').value;wSave();applySpeedW();};
@@ -2152,6 +2233,19 @@ async function wInit(){
     $('wtxt').onchange=()=>{wcfg.txt=$('wtxt').value;wSave();$('wBox').dataset.mode=wcfg.txt;};
     $('wsurah').onchange=()=>{wSetRange(+$('wsurah').value);wRenderText();wRefreshDl();wNumUpdate();};
     $('wfrom').onchange=$('wto').onchange=()=>wRenderText();
+    $('wadjm').onclick=()=>wSetAdj(wGetAdj()-0.1);
+    $('wadjp').onclick=()=>wSetAdj(wGetAdj()+0.1);
+    $('wbsmadj').onchange=()=>{const v=parseFloat($('wbsmadj').value);wSetAdj(isFinite(v)?v:0);};
+    $('wadjtest').onclick=async()=>{
+      const R=wRec();let sn=+$('wsurah').value||1;if(sn===1||sn===9)sn=112;
+      stop();const my=token;
+      statusEl.textContent='ورش · اختبار القص · '+NAMES[sn-1]+' آية 1';
+      const bd=await wAudioDur(R,1,1);
+      if(my!==token)return;
+      const sk=bd>0?Math.max(0,bd+wGetAdj()):0;
+      const ok=await playAyahR(R,sn,1,sk);
+      if(my===token)statusEl.textContent=ok?'انتهى الاختبار (القص '+sk.toFixed(1)+' ث)':'تعذّر التشغيل';
+    };
     $('wgo').onclick=()=>{
       if(!wData()){alert('حمّل نص ورش أولاً.');return;}
       const r=wReadRange();wRun(r.s,r.f,r.t,r.r);
@@ -2165,7 +2259,7 @@ async function wInit(){
       stop();const my=token;
       $('wBox').querySelectorAll('.cur').forEach(x=>x.classList.remove('cur'));el.classList.add('cur');
       statusEl.textContent='ورش · '+NAMES[sn-1]+' · آية '+a;
-      const ok=await playAyahR(wRec(),sn,a);
+      const ok=await playAyahR(wRec(),sn,a,0);
       if(my===token)statusEl.textContent=ok?'انتهى':'تعذّر تشغيل صوت هذه الآية';
     };
     document.addEventListener('click',async e=>{
@@ -2175,6 +2269,7 @@ async function wInit(){
     document.addEventListener('click',async e=>{const b=e.target.closest('.loadWH');if(b)await prepareWarshHafs(b);});
     if(wcfg.last&&wcfg.last.s){$('wsurah').value=wcfg.last.s;}
   }
+  wAdjUI();
   await ensureRiwaya('warsh');
   await ensureRiwaya('warshH');
   await wAfterText();
