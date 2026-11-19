@@ -1825,11 +1825,26 @@ function wReadRange(){
   return {s:sn,f,t,r};
 }
 function wSetRange(sn){$('wsurah').value=sn;$('wfrom').value=1;$('wto').value=wCounts()[sn-1];}
+// هل تُقرأ البسملة (مرة واحدة قبل التكرار) عند البدء من الآية from؟
+// - عامة السور: دائماً. - التوبة: لا بسملة إلا إذا بدأ من آية بعد الأولى.
+// - الفاتحة: إن كانت البسملة آية أولى في النص فلا تُفصل عند البدء من 1، وتُقرأ مرة قبل التكرار عند البدء من غيرها.
+function wNeedsBsm(sn,from){
+  if(sn===9)return from>1;
+  if(sn===1){
+    const d=wData();
+    const isAyah=!!(d&&d.text&&d.text[0]&&d.text[0][0]&&norm(d.text[0][0]).startsWith('بسم'));
+    return !(isAyah&&from===1);
+  }
+  return true;
+}
 function wRenderText(){
   const d=wData(),box=$('wBox');
   if(!d){box.innerHTML='';return;}
   const r=wReadRange();
   renderRange(box,r.s,r.f,r.t,{id:'warsh',text:d.text,counts:d.counts});
+  const need=wNeedsBsm(r.s,r.f),has=box.querySelector('.bsm');
+  if(need&&!has)box.insertAdjacentHTML('afterbegin','<div class="bsm">'+BSM+'</div>');
+  else if(!need&&has)has.remove();
   box.dataset.mode=wcfg.txt;
 }
 function wHighlight(a){
@@ -1894,10 +1909,18 @@ async function wPass(R,sn,a1,a2,my,label){
   }
   return true;
 }
+// البسملة تُقرأ مرة واحدة فقط قبل بدء التكرار (ملف 001001 عند القارئ هو صوت البسملة)
+async function wBsmFirst(R,sn,from,my){
+  if(!wNeedsBsm(sn,from))return my===token;
+  statusEl.textContent='ورش · '+NAMES[sn-1]+' · البسملة';
+  await playAyahR(R,1,1);
+  return my===token;
+}
 async function wRun(sn,from,to,reps){
   stop();const my=token,R=wRec();
   wcfg.last={s:sn,a:from,to,reps};wSave();
   wRenderText();
+  if(!(await wBsmFirst(R,sn,from,my)))return;
   const cum=$('wmode').value==='cum'&&to>from;
   if(!cum){
     for(let r=1;r<=reps;r++){if(!(await wPass(R,sn,from,to,my,'المرة '+r+' من '+reps)))return;}
