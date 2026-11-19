@@ -543,7 +543,22 @@ function renderRange(box,sn,from,to,tv){
   }
   box.innerHTML=parts.join('');
 }
-function renderMainText(sn,f,t){renderRange($('ayahBox'),sn,f,t);$('ayahBox').dataset.mode=cfg.txt;}
+// هل تُقرأ البسملة (مرة واحدة قبل التكرار) عند البدء من الآية from؟ (ترقيم حفص: البسملة آية أولى في الفاتحة)
+// - عامة السور: دائماً. - التوبة والفاتحة: فقط عند البدء من آية بعد الأولى.
+function needsBsm(sn,from){
+  if(sn===9||sn===1)return from>1;
+  return true;
+}
+function renderMainText(sn,f,t){
+  const box=$('ayahBox');
+  renderRange(box,sn,f,t);
+  if(TEXT){
+    const need=needsBsm(sn,f),has=box.querySelector('.bsm');
+    if(need&&!has)box.insertAdjacentHTML('afterbegin','<div class="bsm">'+BSM+'</div>');
+    else if(!need&&has)has.remove();
+  }
+  box.dataset.mode=cfg.txt;
+}
 function renderMainFromInputs(){
   const sn=+$('surah').value,max=COUNTS[sn-1];
   let f=Math.max(1,+$('from').value||1),t=Math.min(max,+$('to').value||max);
@@ -636,8 +651,11 @@ async function gapAfter(my,sn,a){
   await wait(ms);
   return my===token;
 }
-async function bsmFirst(sn,from,my){
-  if(from===1&&sn!==1&&sn!==9&&$('bsmAudio').value==='1'){
+// once=true (شاشة التكرار): بسملة واحدة قبل التكرار حسب القواعد في needsBsm.
+// once=false (المراجعة الصوتية للخطة): السلوك القديم، بسملة عند البدء من الآية 1 فقط.
+async function bsmFirst(sn,from,my,once){
+  const need=once?needsBsm(sn,from):(from===1&&sn!==1&&sn!==9);
+  if(need&&$('bsmAudio').value==='1'){
     statusEl.textContent=NAMES[sn-1]+' · البسملة';
     await playAyah(1,1);
   }
@@ -668,7 +686,7 @@ async function run(s,from,to,reps){
     }
   }catch(e){}
   renderMainText(s,from,to);
-  if(!(await bsmFirst(s,from,my)))return;
+  if(!(await bsmFirst(s,from,my,true)))return;
   const cum=$('rmode').value==='cum'&&to>from;
   if(!cum){
     for(let r=1;r<=reps;r++){
@@ -693,7 +711,7 @@ async function runQueue(items,title){
   stop();const my=token;
   for(let i=0;i<items.length;i++){
     const it=items[i];
-    if(!(await bsmFirst(it.s,it.a1,my)))return;
+    if(!(await bsmFirst(it.s,it.a1,my,false)))return;
     if(!(await playPass(it.s,it.a1,it.a2,my,title+' '+(i+1)+' من '+items.length,null)))return;
   }
   if(my===token)statusEl.textContent='انتهت المراجعة الصوتية. علّم ما أنجزته في مهام اليوم.';
