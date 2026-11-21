@@ -2,7 +2,7 @@
   "appId": "com.noub.hifzquran",
   "appName": "حفظ القرآن",
   "webDir": "www",
-  "backgroundColor": "#F5F0E4",
+  "backgroundColor": "#F6F1E3",
   "server": {
     "androidScheme": "https"
   },
