@@ -329,10 +329,7 @@
     <p class="hint" id="wMsg"></p>
     <label for="wrec">القارئ</label>
     <select id="wrec"></select>
-    <label for="wnum">ترقيم الآيات</label>
-    <select id="wnum"><option value="hafs">ترقيم حفص (يطابق ملفات الصوت)</option><option value="kf">ترقيم المجمع (6214 آية)</option></select>
-    <p class="hint" id="wNumMsg"></p>
-    <p class="hint">شاشة مستقلة عن حفص: نصها وترقيمها وصوتها وتحميلاتها منفصلة. النص من نسخة مجمع الملك فهد، والصوت من موقع everyayah. وترقيم ملفات الصوت قد يخالف ترقيم النص في بعض المواضع، فاستعمل «فحص الترقيم» وقابل الصوت بالنص بأذنك.</p>
+    <p class="hint">شاشة مستقلة عن حفص: النص بترقيم ورش (من مجمع الملك فهد)، والصوت من موقع everyayah بترقيم حفص. يربط التطبيق بين الترقيمين تلقائياً بجدول مطابقة، فيُظلَّل في النص الآية التي يقرؤها القارئ فعلاً. وحيث تُدمج آيتان من حفص في آية واحدة من ورش يُشغَّل ملفاهما معاً.</p>
   </div>
 
   <div class="card">
@@ -366,8 +363,8 @@
   </div>
 
   <div class="card">
-    <h2>فحص الترقيم</h2>
-    <p class="hint">يتأكد أن ملف الصوت لآخر آية في النص موجود، وأنه لا يوجد ملف بعدها. ما يخرج عن ذلك فقد يكون ترقيمه مختلفاً. هذا فحص لوجود الملفات فقط، ولا يغني عن المقابلة بالأذن.</p>
+    <h2>فحص ملفات الصوت</h2>
+    <p class="hint">يتأكد أن ملف الآية الأخيرة (بترقيم حفص) موجود عند هذا القارئ، وأنه لا يوجد ملف بعدها. السور الناقصة لا يكتمل صوتها عند هذا القارئ.</p>
     <div class="row">
       <button class="alt" id="wchk1">فحص السورة المختارة</button>
       <button class="alt" id="wchkAll">فحص كل السور</button>
@@ -1806,16 +1803,49 @@ document.addEventListener('click',async e=>{
 // ---- نهاية الروايات ----
 
 // ---- شاشة ورش المستقلة ----
+// النص بترقيم ورش (مجمع الملك فهد)، والصوت (everyayah) بترقيم حفص.
+// WARSH_N: عدد آيات كل سورة في ورش. WARSH_X: استثناءات جدول ربط آيات ورش بآيات حفص (number_in_hafs من Quranpedia).
+// الأصل أن آية ورش تقابل آية حفص التالية مباشرة. وصيغة الاستثناء: [رقم آية ورش، من آية حفص، إلى آية حفص].
+const WARSH_N=[7,285,200,175,122,167,206,76,130,109,121,111,44,54,99,128,110,105,99,134,111,76,119,62,77,226,95,88,69,59,33,30,73,54,46,82,182,86,72,84,53,50,89,56,36,34,39,29,18,45,60,47,61,55,77,99,28,21,24,13,14,11,11,18,12,12,31,52,52,44,30,28,18,55,39,31,50,40,45,42,29,19,36,25,22,17,19,26,32,20,15,21,11,8,8,20,5,8,9,11,10,8,3,9,5,5,6,3,6,3,5,4,5,6];
+const WARSH_X={"1":[[1,1,2],[7,7,7]],"2":[[1,1,2],[199,200,201],[254,255,255]],"3":[[1,1,2],[4,4,4],[48,48,49],[92,92,92]],"4":[[44,44,45]],"5":[[2,1,1],[17,15,15]],"6":[[2,1,1],[67,66,67],[74,73,73],[163,161,161]],"7":[[1,1,2],[28,29,30],[37,38,38],[137,137,137]],"8":[[43,42,42]],"9":[[71,70,70]],"11":[[54,54,55],[82,82,83],[86,86,86],[118,118,119],[120,121,122]],"13":[[6,5,5],[18,16,16],[25,23,24]],"14":[[2,1,1],[7,5,5],[12,9,9],[22,19,20]],"17":[[107,107,108]],"18":[[23,22,22],[24,23,24],[35,35,36],[84,85,86],[87,89,90],[89,92,93],[99,103,104]],"19":[[1,1,2],[41,41,41],[76,75,75]],"20":[[1,1,2],[39,39,39],[41,41,42],[77,78,79],[85,86,86],[86,87,88],[88,89,89],[91,92,93],[104,106,107],[121,123,123],[130,131,131]],"21":[[66,66,67]],"22":[[19,19,21]],"23":[[46,45,45]],"24":[[36,36,37],[42,43,44]],"26":[[1,1,2],[49,49,49],[210,210,211]],"27":[[34,33,33],[46,44,44]],"28":[[1,1,2],[23,23,23]],"29":[[1,1,2],[29,29,29]],"30":[[1,1,3],[3,4,4]],"31":[[1,1,2]],"32":[[1,1,2],[10,10,10]],"35":[[44,43,43]],"36":[[1,1,2]],"38":[[1,1,2],[83,84,85]],"39":[[4,3,3],[12,11,12],[14,14,15],[35,36,37],[37,39,40]],"40":[[1,1,2],[18,18,18],[53,53,54],[58,58,58],[73,73,74]],"41":[[1,1,2]],"42":[[1,1,3],[30,32,33]],"43":[[1,1,2],[52,52,52]],"44":[[1,1,2],[33,34,35],[41,43,44]],"45":[[1,1,2]],"46":[[1,1,2]],"47":[[5,4,4]],"52":[[1,1,2],[12,13,14]],"53":[[28,28,29]],"55":[[1,1,2],[2,3,4],[34,35,35]],"56":[[9,8,8],[11,9,9],[21,18,18],[25,22,23],[44,41,41],[52,49,50],[53,50,50]],"57":[[13,13,14]],"58":[[20,20,21]],"67":[[10,9,9]],"69":[[1,1,2],[25,25,25]],"71":[[24,23,23],[27,25,25]],"73":[[1,1,2],[16,17,18]],"74":[[40,40,41]],"75":[[16,16,17]],"79":[[37,37,38]],"89":[[16,15,15],[18,16,16],[26,23,23],[32,29,30]],"96":[[16,15,15]],"99":[[7,6,6]],"101":[[1,1,2]],"103":[[1,1,2],[3,3,3]],"106":[[5,4,4]],"107":[[6,6,7]]};
+// WM[سورة-1][آية ورش-1] = أرقام آيات حفص (أرقام ملفات الصوت) التي تغطيها هذه الآية
+const WM=(()=>{
+  const out=[];
+  for(let s=1;s<=114;s++){
+    const ex={};(WARSH_X[s]||[]).forEach(e=>{ex[e[0]]=[e[1],e[2]];});
+    let prev=0;const arr=[];
+    for(let k=1;k<=WARSH_N[s-1];k++){
+      const e=ex[k],lo=e?e[0]:prev+1,hi=e?e[1]:prev+1,l=[];
+      for(let h=lo;h<=hi;h++)l.push(h);
+      arr.push(l);prev=hi;
+    }
+    out.push(arr);
+  }
+  return out;
+})();
+const wMap=(sn,a)=>(WM[sn-1]&&WM[sn-1][a-1])||[a];
+// أرقام ملفات الصوت (حفص) لنطاق آيات ورش from..to، مرتبة وبلا تكرار
+function wHafsOf(sn,from,to){
+  const set=new Set();
+  for(let a=from;a<=to;a++)wMap(sn,a).forEach(h=>set.add(h));
+  return [...set].sort((x,y)=>x-y);
+}
+// آيات ورش (ضمن النطاق) التي يغطيها ملف الصوت رقم h
+function wAyahsOf(sn,h,from,to){
+  const out=[];
+  for(let a=from;a<=to;a++)if(wMap(sn,a).includes(h))out.push(a);
+  return out;
+}
 const WARSH_RECS=[
   {id:'w.dosary',name:'إبراهيم الدوسري (ورش)',style:'مرتّل',cdn:false,ev:['warsh/warsh_ibrahim_aldosary_128kbps']},
   {id:'w.jazaery',name:'ياسين الجزائري (ورش)',style:'مرتّل',cdn:false,ev:['warsh/warsh_yassin_al_jazaery_64kbps']},
   {id:'w.basit',name:'عبد الباسط (ورش) — ملفاته ناقصة',style:'مرتّل',cdn:false,ev:['warsh/warsh_Abdul_Basit_128kbps']}
 ];
-let wcfg=Object.assign({rec:'w.dosary',gap:'0',speed:'1',mode:'norm',reps:'10',txt:'show',num:'hafs',last:null},load('wcfg',{}));
+let wcfg=Object.assign({rec:'w.dosary',gap:'0',speed:'1',mode:'norm',reps:'10',txt:'show',last:null},load('wcfg',{}));
 const wRec=()=>WARSH_RECS.find(r=>r.id===wcfg.rec)||WARSH_RECS[0];
 const wDlKey=id=>'dl_'+id;
-const wData=()=>(wcfg.num==='hafs'&&RWDATA.warshH)?RWDATA.warshH:(RWDATA.warsh||null);
-const wCounts=()=>{const d=wData();return d?d.counts:COUNTS;};
+const wData=()=>RWDATA.warsh||null;
+const wCounts=()=>{const d=wData();return d?d.counts:WARSH_N;};
 function wSave(){save('wcfg',wcfg);}
 function wReadRange(){
   const sn=+$('wsurah').value||1,max=wCounts()[sn-1];
@@ -1832,16 +1862,26 @@ function wRenderText(){
   renderRange(box,r.s,r.f,r.t,{id:'warsh',text:d.text,counts:d.counts});
   box.dataset.mode=wcfg.txt;
 }
-function wHighlight(a){
+// يُظلَّل عدة آيات إن غطّاها ملف صوت واحد
+function wHighlight(list){
   const box=$('wBox');
   box.querySelectorAll('.ay.cur').forEach(e=>e.classList.remove('cur'));
-  const el=box.querySelector('.ay[data-a="'+a+'"]');
-  if(el){el.classList.add('cur');box.scrollTop=Math.max(0,el.offsetTop-box.clientHeight/3);}
+  let first=null;
+  list.forEach(a=>{
+    const el=box.querySelector('.ay[data-a="'+a+'"]');
+    if(el){el.classList.add('cur');if(!first)first=el;}
+  });
+  if(first)box.scrollTop=Math.max(0,first.offsetTop-box.clientHeight/3);
 }
 function wUpdateMsg(){
-  const el=$('wMsg');
-  if(wData()){el.textContent='';return;}
-  el.innerHTML='نص ورش غير محمّل. <button class="alt loadW" style="flex:none;padding:8px 12px">تحميل النص (مرة واحدة)</button>';
+  const el=$('wMsg'),d=wData();
+  if(!d){
+    el.innerHTML='نص ورش غير محمّل. <button class="alt loadW" style="flex:none;padding:8px 12px">تحميل النص (مرة واحدة)</button>';
+    return;
+  }
+  const bad=[];
+  for(let s=1;s<=114;s++)if(WM[s-1].length!==d.counts[s-1])bad.push(s);
+  el.textContent=bad.length?'⚠ جدول المطابقة لا يوافق عدد آيات النص في: '+bad.slice(0,12).map(x=>NAMES[x-1]).join('، ')+'. سيُظلَّل في هذه السور بالأرقام نفسها دون مطابقة.':'';
 }
 async function wApplyFont(){
   let fam=null;
@@ -1875,19 +1915,23 @@ function playAyahR(R,sn,a){
     tryNext();
   });
 }
+// يشغّل نطاق آيات ورش a1..a2 مرة واحدة: ملفات الصوت بترقيم حفص، والتظليل على آية ورش المقابلة
 async function wPass(R,sn,a1,a2,my,label){
-  for(let a=a1;a<=a2;a++){
+  const hs=wHafsOf(sn,a1,a2);
+  for(const h of hs){
     if(my!==token)return false;
-    wHighlight(a);
-    statusEl.textContent='ورش · '+NAMES[sn-1]+' · آية '+a+(label?' · '+label:'');
-    const ok=await playAyahR(R,sn,a);
+    const as=wAyahsOf(sn,h,a1,a2);
+    wHighlight(as);
+    const lbl=as.length?as.join('،'):String(h);
+    statusEl.textContent='ورش · '+NAMES[sn-1]+' · آية '+lbl+(label?' · '+label:'');
+    const ok=await playAyahR(R,sn,h);
     if(my!==token)return false;
-    if(!ok){statusEl.textContent='تعذّر تشغيل صوت ورش لهذه الآية (قد لا يوجد ملف بهذا الرقم). جرّب «فحص الترقيم».';return false;}
+    if(!ok){statusEl.textContent='تعذّر تشغيل صوت ورش (ملف الصوت رقم '+h+'). جرّب «فحص ملفات الصوت».';return false;}
     const g=$('wgap').value;
     if(g!=='0'){
       const d=isFinite(player.duration)?player.duration*1000:3000;
       const ms=g==='1'?d:g==='2'?d*2:3000;
-      statusEl.textContent='ورش · '+NAMES[sn-1]+' · آية '+a+' · رددها الآن...';
+      statusEl.textContent='ورش · '+NAMES[sn-1]+' · آية '+lbl+' · رددها الآن...';
       await wait(ms);
       if(my!==token)return false;
     }
@@ -1911,16 +1955,16 @@ async function wRun(sn,from,to,reps){
   }
   if(my===token)statusEl.textContent='انتهى التشغيل';
 }
+// تحميل صوت السورة: أرقام ملفات حفص (عددها COUNTS[sn-1])
 async function wDownload(btn){
   const R=wRec(),sn=+$('wsurah').value||1,set=new Set(load(wDlKey(R.id),[]));
-  const n=wCounts()[sn-1],S=sourcesFor(R);
+  const n=COUNTS[sn-1],S=sourcesFor(R);
   if(set.has(sn)){
     if(!confirm('حذف تحميل هذه السورة؟'))return;
     const c=await caches.open(CACHE_NAME);
     for(let a=1;a<=n;a++)await c.delete(S[0](sn,a));
     set.delete(sn);save(wDlKey(R.id),[...set]);wRefreshDl();return;
   }
-  if(!wData()){alert('حمّل نص ورش أولاً.');return;}
   btn.disabled=true;
   try{
     if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
@@ -1959,17 +2003,17 @@ function wSummarize(res,names){
   const nm=l=>l.slice(0,15).map(x=>names[x.sn-1]+' ('+x.N+')').join('، ')+(l.length>15?' ... (+'+(l.length-15)+')':'');
   let t='فُحصت '+res.length+' سورة: ✓ '+ok.length+' سليمة.';
   if(missing.length)t+=' ناقصة (ملف الآية الأخيرة غير موجود): '+nm(missing)+'.';
-  if(over.length)t+=' قد يختلف ترقيمها (يوجد ملف بعد الآية الأخيرة): '+nm(over)+'.';
-  if(!missing.length&&!over.length)t+=' لم يظهر اختلاف في الأرقام.';
+  if(over.length)t+=' يوجد ملف بعد الآية الأخيرة (قد يختلف الترقيم): '+nm(over)+'.';
+  if(!missing.length&&!over.length)t+=' لم يظهر أي اختلاف في الملفات.';
   return t;
 }
+// الفحص بترقيم حفص (ترقيم ملفات الصوت)
 async function wCheck(list,btn){
-  if(!wData()){alert('حمّل نص ورش أولاً.');return;}
-  const R=wRec(),S=sourcesFor(R)[0],counts=wCounts();
+  const R=wRec(),S=sourcesFor(R)[0];
   const old=btn.textContent;btn.disabled=true;btn.textContent='جارٍ الفحص...';$('wChk').textContent='';
   try{
     const res=await runPool(list,async sn=>{
-      const N=counts[sn-1];
+      const N=COUNTS[sn-1];
       const [last,over]=await Promise.all([probeAudioUrl(S(sn,N)),probeAudioUrl(S(sn,N+1))]);
       return {sn,N,last,over};
     },6);
@@ -1977,139 +2021,20 @@ async function wCheck(list,btn){
   }catch(e){$('wChk').textContent='تعذّر الفحص: '+(e&&e.message||e);}
   btn.disabled=false;btn.textContent=old;
 }
-// ---- ورش بترقيم حفص (مطابقة عبر number_in_hafs) ----
-const RISAN='https://quran-json.risanb.com/text/warsh/chapters/';
-const wordsOfV=t=>String(t).split(/\s+/).filter(Boolean);
-const isArTok=w=>/[\u0621-\u064A\u0671-\u06D3]/.test(w);
-function parseMapChapter(j){
-  const vs=Array.isArray(j)?j:(j&&(j.verses||(j.chapter&&j.chapter.verses)||(j.data&&j.data.verses)));
-  if(!Array.isArray(vs))return null;
-  const out=vs.map(v=>{
-    if(!v||typeof v!=='object')return null;
-    let a=v.number_in_hafs;
-    if(a==null){const k=Object.keys(v).find(x=>/hafs/i.test(x));a=k?v[k]:null;}
-    if(typeof a==='number')a=[a];
-    if(!Array.isArray(a))return null;
-    a=a.map(Number).filter(x=>x>=1);
-    return a.length?a:null;
-  });
-  return out.every(Boolean)?out:null;
-}
-// يقطّع كلمات ورش (آياته بترقيمه) عند حدود آيات حفص. يرجع {ok,verses} أو {ok:false,why}
-function cutSurah(s,wv,hv,mp){
-  if(s===1&&wv.length){
-    const tk=wordsOfV(wv[0]);
-    if(tk.length>4&&norm(tk[0])==='بسم'&&norm(tk[1])==='الله')wv=[tk.slice(4).join(' ')].concat(wv.slice(1));
-  }
-  const nW=wv.length,nH=hv.length;
-  if(!mp||mp.length!==nW)return {ok:false,why:'خريطة المطابقة لا توافق عدد آيات ورش'};
-  const groups=[];let cur=null;
-  for(let i=0;i<nW;i++){
-    const H=mp[i],lo=Math.min(...H),hi=Math.max(...H);
-    if(lo<1||hi>nH)return {ok:false,why:'رقم آية حفص خارج المدى'};
-    if(cur&&lo<=cur.hi){cur.w.push(i);cur.hi=Math.max(cur.hi,hi);cur.lo=Math.min(cur.lo,lo);}
-    else{cur={w:[i],lo,hi};groups.push(cur);}
-  }
-  const verses=new Array(nH).fill(null);
-  for(const g of groups){
-    const tokens=[];g.w.forEach(i=>wordsOfV(wv[i]).forEach(t=>tokens.push(t)));
-    const A=tokens.filter(isArTok).length;
-    const hc=[];let sum=0;
-    for(let h=g.lo;h<=g.hi;h++){const c=wordsOfV(hv[h-1]).filter(isArTok).length;hc.push(c);sum+=c;}
-    if(sum!==A)return {ok:false,why:'عدد الكلمات لا يتطابق عند '+g.lo+'–'+g.hi+' ('+A+' مقابل '+sum+')'};
-    let p=0;
-    for(let h=g.lo;h<=g.hi;h++){
-      let need=hc[h-g.lo];const part=[];
-      while(need>0&&p<tokens.length){const t=tokens[p++];part.push(t);if(isArTok(t))need--;}
-      verses[h-1]=part;
-    }
-    while(p<tokens.length)verses[g.hi-1].push(tokens[p++]);
-  }
-  for(let h=1;h<=nH;h++){
-    if(verses[h-1])continue;
-    if(s===1&&h===1)verses[0]=wordsOfV(hv[0]);
-    else return {ok:false,why:'آية حفص '+h+' بلا مقابل في ورش'};
-  }
-  return {ok:true,verses:verses.map(v=>v.join(' '))};
-}
-function buildWarshHafs(wr,hafs,map){
-  const text=[],counts=[],bad=[],why={};
-  for(let s=1;s<=114;s++){
-    let res;
-    try{res=cutSurah(s,wr.text[s-1],hafs.text[s-1],map[s-1]);}catch(e){res={ok:false,why:String(e&&e.message||e)};}
-    if(res.ok){text.push(res.verses);counts.push(res.verses.length);}
-    else{text.push(wr.text[s-1].slice());counts.push(wr.counts[s-1]);bad.push(s);why[s]=res.why;}
-  }
-  return {text,counts,bad,why};
-}
-async function fetchWarshMap(cb){
-  try{
-    const c=await caches.open('qtext'),r=await c.match('wmap-v1');
-    if(r){const m=await r.json();if(Array.isArray(m)&&m.length===114)return {map:m};}
-  }catch(e){}
-  const out=new Array(114),errs=[];let done=0;
-  await runPool(Array.from({length:114},(_,i)=>i+1),async n=>{
-    try{
-      const r=await fetch(RISAN+n+'.json');
-      if(!r.ok){errs.push(n+': http '+r.status);return;}
-      const m=parseMapChapter(await r.json());
-      if(!m){errs.push(n+': صيغة غير متوقعة');return;}
-      out[n-1]=m;
-    }catch(e){errs.push(n+': '+String(e&&e.message||e));}
-    finally{done++;if(cb)cb(done);}
-  },6);
-  if(errs.length||out.some(x=>!x))return {err:errs.slice(0,4).join(' | ')||'نقص في البيانات'};
-  try{const c=await caches.open('qtext');await c.put('wmap-v1',new Response(JSON.stringify(out)));}catch(e){}
-  return {map:out};
-}
-async function prepareWarshHafs(btn){
-  const old=btn?btn.textContent:'';
-  if(btn){btn.disabled=true;btn.textContent='جارٍ التجهيز...';}
-  try{
-    if(!(await ensureRiwaya('warsh'))&&!(await fetchRiwaya('warsh',null)))return false;
-    let ref=null;
-    if(await ensureRiwaya('hafsk')||await fetchRiwaya('hafsk',null))ref=RWDATA.hafsk;
-    else if(TEXT)ref={text:TEXT};
-    if(!ref){alert('يلزم نص حفص لمقارنة الكلمات. حمّله من تبويب «قراءة واختبار».');return false;}
-    const m=await fetchWarshMap(n=>{if(btn)btn.textContent='خريطة المطابقة '+n+'/114';});
-    if(m.err){alert('تعذّر جلب خريطة المطابقة.\nالسبب التقني: '+m.err);return false;}
-    const R=buildWarshHafs(RWDATA.warsh,ref,m.map);
-    RWDATA.warshH=R;
-    try{const c=await caches.open('qtext');await c.put('riw-warshH',new Response(JSON.stringify(R)));}catch(e){}
-    wcfg.num='hafs';wSave();$('wnum').value='hafs';
-    await wAfterText();
-    return true;
-  }finally{
-    if(btn){btn.disabled=false;btn.textContent=old||'تجهيز ترقيم حفص';}
-  }
-}
-const escH=x=>String(x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-function wNumUpdate(){
-  const el=$('wNumMsg'),H=RWDATA.warshH;
-  if(!H){el.innerHTML='ترقيم حفص (الذي يطابق ملفات الصوت) غير مجهّز. <button class="alt loadWH" style="flex:none;padding:8px 12px">تجهيز ترقيم حفص</button>';return;}
-  const sn=+$('wsurah').value||1,bad=H.bad||[];
-  let t='ترقيم حفص جاهز: '+(114-bad.length)+' سورة مطابقة'+(bad.length?'، وغير مطابقة: '+bad.slice(0,12).map(x=>NAMES[x-1]).join('، ')+(bad.length>12?' ...':'')+'.':'.');
-  if(wcfg.num==='hafs'&&bad.includes(sn))t+=' ⚠ هذه السورة بقيت على ترقيم المجمع، فلا يطابقها الصوت.';
-  let html=escH(t);
-  if(bad.length)html+='<details style="margin-top:6px"><summary>تفاصيل السور غير المطابقة</summary>'+bad.map(x=>'<div style="margin-top:4px">'+escH(NAMES[x-1])+' ('+x+'): '+escH((H.why&&H.why[x])||'—')+'</div>').join('')+'</details>';
-  html+=' <button class="alt loadWH" style="flex:none;padding:6px 10px;margin-top:6px">إعادة بناء الترقيم</button>';
-  el.innerHTML=html;
-}
 let wInited=false,wRestored=false;
 async function wInit(){
   if(!wInited){
     wInited=true;
     WARSH_RECS.forEach(r=>{const o=document.createElement('option');o.value=r.id;o.textContent=r.name;$('wrec').appendChild(o);});
     NAMES.forEach((n,i)=>{const o=document.createElement('option');o.value=i+1;o.textContent=(i+1)+' - '+n;$('wsurah').appendChild(o);});
-    $('wrec').value=wcfg.rec;$('wnum').value=wcfg.num;$('wgap').value=wcfg.gap;$('wspeed').value=wcfg.speed;$('wmode').value=wcfg.mode;$('wreps').value=wcfg.reps;$('wtxt').value=wcfg.txt;
+    $('wrec').value=wcfg.rec;$('wgap').value=wcfg.gap;$('wspeed').value=wcfg.speed;$('wmode').value=wcfg.mode;$('wreps').value=wcfg.reps;$('wtxt').value=wcfg.txt;
     $('wrec').onchange=()=>{wcfg.rec=$('wrec').value;wSave();wRefreshDl();};
-    $('wnum').onchange=()=>{wcfg.num=$('wnum').value;wSave();wSetRange(+$('wsurah').value);wRenderText();wRefreshDl();wNumUpdate();};
     $('wgap').onchange=()=>{wcfg.gap=$('wgap').value;wSave();};
     $('wspeed').onchange=()=>{wcfg.speed=$('wspeed').value;wSave();applySpeedW();};
     $('wmode').onchange=()=>{wcfg.mode=$('wmode').value;wSave();};
     $('wreps').onchange=()=>{wcfg.reps=$('wreps').value;wSave();};
     $('wtxt').onchange=()=>{wcfg.txt=$('wtxt').value;wSave();$('wBox').dataset.mode=wcfg.txt;};
-    $('wsurah').onchange=()=>{wSetRange(+$('wsurah').value);wRenderText();wRefreshDl();wNumUpdate();};
+    $('wsurah').onchange=()=>{wSetRange(+$('wsurah').value);wRenderText();wRefreshDl();};
     $('wfrom').onchange=$('wto').onchange=()=>wRenderText();
     $('wgo').onclick=()=>{
       if(!wData()){alert('حمّل نص ورش أولاً.');return;}
@@ -2122,24 +2047,28 @@ async function wInit(){
       const el=e.target.closest('.ay');if(!el)return;
       const sn=+$('wsurah').value||1,a=+el.dataset.a;
       stop();const my=token;
-      $('wBox').querySelectorAll('.cur').forEach(x=>x.classList.remove('cur'));el.classList.add('cur');
-      statusEl.textContent='ورش · '+NAMES[sn-1]+' · آية '+a;
-      const ok=await playAyahR(wRec(),sn,a);
-      if(my===token)statusEl.textContent=ok?'انتهى':'تعذّر تشغيل صوت هذه الآية';
+      const R=wRec(),hs=wMap(sn,a);
+      for(const h of hs){
+        if(my!==token)return;
+        wHighlight([a]);
+        statusEl.textContent='ورش · '+NAMES[sn-1]+' · آية '+a;
+        const ok=await playAyahR(R,sn,h);
+        if(my!==token)return;
+        if(!ok){statusEl.textContent='تعذّر تشغيل صوت هذه الآية';return;}
+      }
+      if(my===token)statusEl.textContent='انتهى';
     };
     document.addEventListener('click',async e=>{
       const b=e.target.closest('.loadW');if(!b)return;
       if(await fetchRiwaya('warsh',b)){await wAfterText();}
     });
-    document.addEventListener('click',async e=>{const b=e.target.closest('.loadWH');if(b)await prepareWarshHafs(b);});
     if(wcfg.last&&wcfg.last.s){$('wsurah').value=wcfg.last.s;}
   }
   await ensureRiwaya('warsh');
-  await ensureRiwaya('warshH');
   await wAfterText();
 }
 async function wAfterText(){
-  wUpdateMsg();wNumUpdate();
+  wUpdateMsg();
   const sn=+$('wsurah').value||1,L=wcfg.last;
   if(L&&L.s===sn&&!wRestored){wRestored=true;$('wfrom').value=L.a;$('wto').value=L.to;$('wreps').value=L.reps;}
   else if(!+$('wto').value||+$('wto').value>wCounts()[sn-1])$('wto').value=wCounts()[sn-1];
