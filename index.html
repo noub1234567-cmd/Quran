@@ -91,6 +91,19 @@
   .alt.on,.hzrow .on{background:var(--em);color:var(--on-em);border-color:var(--em)}
   details summary{cursor:pointer;color:var(--accent);font-weight:700;padding:6px 0}
   .tip{background:var(--gold-soft);color:var(--ink);border-radius:12px;padding:10px;font-size:13px;margin-bottom:10px}
+  /* بطاقات قابلة للطيّ */
+  details.fold{padding:0}
+  details.fold>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;font-family:'Noto Kufi Arabic',system-ui,sans-serif;font-size:16px;font-weight:700;color:var(--accent)}
+  details.fold>summary::-webkit-details-marker{display:none}
+  details.fold>summary::after{content:"\25BE";color:var(--gold-ink);font-size:18px}
+  details.fold[open]>summary::after{transform:rotate(180deg)}
+  details.fold .ft{padding-inline-start:10px;border-inline-start:4px solid var(--gold);line-height:1.5}
+  details.fold .ft small{font-weight:500;color:var(--mute);font-size:12px}
+  details.fold>.foldBody{padding:0 16px 16px}
+  /* خيارات متقدمة داخل البطاقة */
+  .adv{margin-top:12px;border:1px dashed var(--line2);border-radius:12px;padding:0 12px}
+  .adv>summary{padding:10px 0}
+  .adv[open]{padding-bottom:12px}
 </style>
 </head>
 <body>
@@ -107,23 +120,27 @@
     <div><label for="to">إلى آية</label><input id="to" type="number" min="1" value="1" inputmode="numeric"></div>
     <div><label for="reps">عدد المرات</label><input id="reps" type="number" min="1" value="10" inputmode="numeric"></div>
   </div>
-  <div class="row">
-    <div><label for="gap">فاصل للترديد</label>
-      <select id="gap"><option value="0">بدون</option><option value="1">بقدر الآية</option><option value="2">ضعف الآية</option><option value="3">3 ثوانٍ</option></select></div>
-    <div><label for="speed">السرعة</label>
-      <select id="speed"><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option></select></div>
-    <div><label for="sleep">مؤقت الإيقاف</label>
-      <select id="sleep"><option value="0">بدون</option><option value="10">10 د</option><option value="20">20 د</option><option value="30">30 د</option><option value="60">60 د</option></select></div>
-  </div>
-  <label for="rmode">نمط التكرار</label>
-  <select id="rmode"><option value="norm">عادي (كل الآيات ثم تعاد)</option><option value="cum">تراكمي للربط (1، ثم 1-2، ثم 1-2-3...)</option></select>
-  <p class="hint">في النمط التراكمي يُطبَّق «عدد المرات» على كل مرحلة.</p>
-  <div class="row">
-    <div><label for="bsmAudio">البسملة قبل السورة</label>
-      <select id="bsmAudio"><option value="1">تشغيل</option><option value="0">إيقاف</option></select></div>
-  </div>
+  <details class="adv" id="foldAdv">
+    <summary>خيارات متقدمة</summary>
+    <div class="row">
+      <div><label for="gap">فاصل للترديد</label>
+        <select id="gap"><option value="0">بدون</option><option value="1">بقدر الآية</option><option value="2">ضعف الآية</option><option value="3">3 ثوانٍ</option></select></div>
+      <div><label for="speed">السرعة</label>
+        <select id="speed"><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option></select></div>
+      <div><label for="sleep">مؤقت الإيقاف</label>
+        <select id="sleep"><option value="0">بدون</option><option value="10">10 د</option><option value="20">20 د</option><option value="30">30 د</option><option value="60">60 د</option></select></div>
+    </div>
+    <label for="rmode">نمط التكرار</label>
+    <select id="rmode"><option value="norm">عادي (كل الآيات ثم تعاد)</option><option value="cum">تراكمي للربط (1، ثم 1-2، ثم 1-2-3...)</option></select>
+    <p class="hint">في النمط التراكمي يُطبَّق «عدد المرات» على كل مرحلة.</p>
+    <div class="row">
+      <div><label for="bsmAudio">البسملة قبل السورة</label>
+        <select id="bsmAudio"><option value="1">تشغيل</option><option value="0">إيقاف</option></select></div>
+    </div>
+    <p class="hint">«الفاصل» وقت صامت بعد كل آية لتردد أنت.</p>
+  </details>
   <button class="primary" id="go">▶ ابدأ التكرار</button>
-  <p class="hint">«الفاصل» وقت صامت بعد كل آية لتردد أنت. ويُحفظ آخر موضع تلقائياً.</p>
+  <p class="hint">يُحفظ آخر موضع تلقائياً.</p>
 </div>
 
 <div class="card">
@@ -134,34 +151,50 @@
   <div id="ayahBox" class="quranText" data-mode="show"></div>
 </div>
 
-<div class="card">
-  <h2>سجّل تلاوتك وقارن (آية بآية)</h2>
-  <div class="row" style="align-items:flex-end">
-    <button class="alt" id="prevAy">السابقة</button>
-    <div><label for="ay">رقم الآية (من السورة المختارة أعلاه)</label><input id="ay" type="number" min="1" value="1" inputmode="numeric"></div>
-    <button class="alt" id="nextAy">التالية</button>
+<details class="card fold" id="foldRec">
+  <summary><span class="ft">سجّل تلاوتك وقارن (آية بآية)</span></summary>
+  <div class="foldBody">
+    <div class="row" style="align-items:flex-end">
+      <button class="alt" id="prevAy">السابقة</button>
+      <div><label for="ay">رقم الآية (من السورة المختارة أعلاه)</label><input id="ay" type="number" min="1" value="1" inputmode="numeric"></div>
+      <button class="alt" id="nextAy">التالية</button>
+    </div>
+    <p class="hint" id="recInfo"></p>
+    <div class="row" style="margin-top:10px">
+      <button class="alt" id="rec">● سجّل</button>
+      <button class="alt" id="sheikh">▶ الشيخ</button>
+      <button class="alt" id="mine" disabled>▶ تسجيلي</button>
+      <button class="alt" id="cmp" disabled>⇄ قارن</button>
+    </div>
+    <p class="hint">اقرأ الآية ثم أوقف التسجيل. «تسجيلي» يعيد سماع تلاوتك دون إعادة التسجيل، و«قارن» يشغّل الشيخ ثم تلاوتك. تسجيل جديد لنفس الآية يستبدل القديم.</p>
   </div>
-  <p class="hint" id="recInfo"></p>
-  <div class="row" style="margin-top:10px">
-    <button class="alt" id="rec">● سجّل</button>
-    <button class="alt" id="sheikh">▶ الشيخ</button>
-    <button class="alt" id="mine" disabled>▶ تسجيلي</button>
-    <button class="alt" id="cmp" disabled>⇄ قارن</button>
-  </div>
-  <p class="hint">اقرأ الآية ثم أوقف التسجيل. «تسجيلي» يعيد سماع تلاوتك دون إعادة التسجيل، و«قارن» يشغّل الشيخ ثم تلاوتك. تسجيل جديد لنفس الآية يستبدل القديم.</p>
-</div>
+</details>
 
-<div class="card">
-  <h2>تسجيلاتي</h2>
-  <div class="row">
-    <button class="alt" id="playAll">▶ استمع للكل</button>
-    <button class="alt" id="delAll">🗑 حذف الكل</button>
+<details class="card fold" id="foldMine">
+  <summary><span class="ft">تسجيلاتي</span></summary>
+  <div class="foldBody">
+    <div class="row">
+      <button class="alt" id="playAll">▶ استمع للكل</button>
+      <button class="alt" id="delAll">🗑 حذف الكل</button>
+    </div>
+    <div id="recList" style="margin-top:10px"></div>
+    <p class="hint">التسجيلات تبقى في هاتفك فقط ولا تُرفع لأي مكان.</p>
   </div>
-  <div id="recList" style="margin-top:10px"></div>
-  <p class="hint">التسجيلات تبقى في هاتفك فقط ولا تُرفع لأي مكان.</p>
-</div>
+</details>
 
-<div class="list" id="list"></div>
+<details class="card fold" id="foldList">
+  <summary><span class="ft">قائمة السور <small id="listCount">(114)</small></span></summary>
+  <div class="foldBody">
+    <input id="listSearch" type="search" placeholder="ابحث باسم السورة أو رقمها" autocomplete="off">
+    <div class="row chips" style="margin-top:8px">
+      <button class="alt on" data-f="all">الكل</button>
+      <button class="alt" data-f="mem">★ المحفوظة</button>
+      <button class="alt" data-f="dl">✓ المحمّلة</button>
+    </div>
+    <p class="hint" id="listEmpty" hidden>لا توجد سور مطابقة.</p>
+    <div class="list" id="list" style="margin:10px 0 0"></div>
+  </div>
+</details>
 <p id="note">الصوت: مشاري العفاسي. ★ لتعليم السورة المحفوظة، و«تحميل» لتعمل دون إنترنت.</p>
 
 </main>
@@ -467,6 +500,8 @@ const keyOf=(s,a)=>s+':'+a;
 let TEXT=null;
 const BSM='بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ';
 const norm=t=>t.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g,'').replace(/\u0671/g,'\u0627');
+// تطبيع للبحث: يوحّد الهمزات والتاء المربوطة والألف المقصورة
+const nq=t=>norm(String(t)).replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').trim();
 const hasHole=arr=>{for(let i=0;i<arr.length;i++)if(!arr[i])return true;return false;};
 const ar=n=>String(n).replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
 function buildText(j){
@@ -557,20 +592,47 @@ function highlight(a){
 function onTextReady(){updateTextMsgs();renderMainFromInputs();renderRead();}
 
 // ---- واجهة ----
+let listFilter='all';
+const NN=NAMES.map(nq);
 NAMES.forEach((n,i)=>{
   const o=document.createElement('option');o.value=i+1;o.textContent=(i+1)+' - '+n;$('surah').appendChild(o);
-  const d=document.createElement('div');d.className='item';
+  const d=document.createElement('div');d.className='item';d.dataset.s=i+1;
   d.innerHTML=`<button class="play" data-s="${i+1}"><span class="num">${i+1}</span> ${n} <small>(${COUNTS[i]} آية)</small></button><button class="mem" data-s="${i+1}"></button><button class="dl" data-s="${i+1}"></button>`;
   $('list').appendChild(d);
+});
+// بحث وفلتر قائمة السور
+function applyListFilter(){
+  const qv=nq($('listSearch').value||''),items=document.querySelectorAll('#list .item');
+  let shown=0;
+  items.forEach(it=>{
+    const s=+it.dataset.s;
+    let ok=!qv||NN[s-1].includes(qv)||String(s)===qv;
+    if(ok&&listFilter==='mem')ok=memorized.has(s);
+    if(ok&&listFilter==='dl')ok=downloaded.has(s);
+    it.hidden=!ok;
+    if(ok)shown++;
+  });
+  $('listCount').textContent='('+shown+')';
+  $('listEmpty').hidden=shown>0;
+}
+$('listSearch').oninput=applyListFilter;
+document.querySelectorAll('.chips button').forEach(b=>{
+  b.onclick=()=>{
+    listFilter=b.dataset.f;
+    document.querySelectorAll('.chips button').forEach(x=>x.classList.toggle('on',x===b));
+    applyListFilter();
+  };
 });
 function refreshDl(){
   document.querySelectorAll('.dl').forEach(b=>{
     const done=downloaded.has(+b.dataset.s);
     b.textContent=done?'✓ محمّلة':'تحميل';b.classList.toggle('done',done);
   });
+  applyListFilter();
 }
 function refreshMem(){
   document.querySelectorAll('.mem').forEach(b=>{b.textContent=memorized.has(+b.dataset.s)?'★':'☆';});
+  applyListFilter();
 }
 refreshDl();refreshMem();
 function setRange(s){$('surah').value=s;$('from').value=1;$('to').value=COUNTS[s-1];$('ay').value=1;refreshRecInfo();renderMainFromInputs();}
@@ -2076,6 +2138,13 @@ async function wAfterText(){
   await wApplyFont();
   wRenderText();wRefreshDl();
 }
+
+// ---- تذكّر حالة البطاقات المطويّة ----
+const foldSt=load('fold',{});
+document.querySelectorAll('details[id^="fold"]').forEach(d=>{
+  if(d.id in foldSt)d.open=!!foldSt[d.id];
+  d.addEventListener('toggle',()=>{foldSt[d.id]=d.open;save('fold',foldSt);});
+});
 
 applyTheme();
 updateNote();
