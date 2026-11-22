@@ -5,7 +5,7 @@
  *   const pass = TartilTracker.buildPassage(refData, sura, from, to);
  *   const tr = TartilTracker.create(pass, refData.vocab);
  *   const r = tr.process(logp, T, V);   // -> {status:'ok'|'lost'|'unreliable'|'short', start, end, flags}
- *   tr.wordStates()                     // per word: 'pending' | 'skipped' | 'partial' | 'ok' | 'possible' | 'error'
+ *   tr.wordStates()                     // per word: 'pending' | 'skipped' | 'unheard' | 'partial' | 'ok' | 'possible' | 'error'
  */
 (function (root, factory) {
   const api = factory(root.TartilDetect || (typeof require === 'function' ? require('./detect.js') : null));
@@ -92,10 +92,16 @@
     function wordStates() {
       let last = -1;   // آخر كلمة غُطّي منها شيء: ما قبلها وغير مغطّى = أُسقط
       pass.wordRange.forEach(([a, b], i) => { for (let j = a; j <= b; j++) if (covered[j]) { last = i; break; } });
+      const unc = pass.wordRange.map(([a, b]) => { for (let j = a; j <= b; j++) if (covered[j]) return false; return true; });
       return pass.wordRange.map(([a, b], i) => {
         let c = 0, sv = 0;
         for (let j = a; j <= b; j++) { c += covered[j]; if (sev[j] > sv) sv = sev[j]; }
-        if (!c) return i < last ? 'skipped' : 'pending';
+        if (!c) {
+          if (i >= last) return 'pending';
+          // كلمة واحدة معزولة بين مقطعين غالبًا لم يلتقطها المحاذي عند الحافة: «لم تُسمع بوضوح»؛ كلمتان فأكثر متتاليتان: «أُسقطت»
+          let l = i, r = i; while (l > 0 && unc[l - 1]) l--; while (r < unc.length - 1 && unc[r + 1] && r + 1 < last) r++;
+          return r - l + 1 >= 2 ? 'skipped' : 'unheard';
+        }
         if (c < b - a + 1) return 'partial';
         return sv === 2 ? 'error' : sv === 1 ? 'possible' : 'ok';
       });
