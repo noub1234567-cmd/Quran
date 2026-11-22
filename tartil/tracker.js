@@ -70,7 +70,11 @@
       const lost0 = lost; lost = 0;
       // فجوة صغيرة بين نهاية ما سبق وبداية هذا المقطع: غالبًا كلمة أولى لم يتعرّف عليها المحاذي (مثل ع، م)؛ نمدّ البداية ليحكم الكاشف عليها بالصوت
       let { start, end } = m;
-      if (!lost0 && cursor > 0 && start > cursor && start - cursor <= 10) start = cursor;
+      if (!lost0 && start > 0 && !covered[start - 1]) {
+        let s = start; while (s > 0 && !covered[s - 1] && start - s < 10) s--;
+        while (s < start && s > 0 && pass.word[s] === pass.word[s - 1]) s++;   // لا نبدأ في منتصف كلمة: كلمات كاملة غير مغطّاة فقط
+        if (s < start) start = s;
+      }
       const len = end - start;
       const ref = { syms: pass.syms.slice(start, end), word: pass.word.slice(start, end), tags: pass.tags.slice(start, end), words: pass.words };
       let res;
