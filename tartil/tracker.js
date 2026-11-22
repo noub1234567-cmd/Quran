@@ -53,7 +53,7 @@
   }
 
   function create(pass, vocab, opts) {
-    const o = Object.assign({ maxLocateRate: 0.55, back: 4, minHyp: 4, params: null }, opts || {});
+    const o = Object.assign({ maxLocateRate: 0.55, back: 14, minHyp: 4, params: null }, opts || {});
     const inv = {}; for (const s in vocab) inv[vocab[s]] = s;
     const n = pass.syms.length;
     const covered = new Uint8Array(n), sev = new Uint8Array(n);   // sev: 0 ok, 1 possible, 2 confirmed

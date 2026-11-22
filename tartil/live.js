@@ -49,6 +49,7 @@
       minSegMs: 1200,      // لا نقطع قبل هذا الطول
       maxSegMs: 10000,     // قطع إجباري عند أضعف نقطة
       minVoicedMs: 350,    // أقل كلام لاعتبار المقطع
+      overlapSamples: 16000,   // ثانية واحدة عند القطع الإجباري
       keepMs: 150,         // صمت يُحتفظ به حول الكلام
       thrMin: 0.010,
       floorMul: 3.5,
@@ -112,7 +113,7 @@
         for (let k = lo; k < hi; k++) { const v = (en[k - 1] + en[k] + en[k + 1]) / 3; if (v < bv) { bv = v; best = k; } }
         const end = (best + 1) * F;
         emit(end, true);
-        segStart = end;
+        segStart = Math.max(segStart + 1, end - o.overlapSamples);   // تداخل: الكلمة المقطوعة تظهر كاملة في المقطع التالي
       }
     }
 
