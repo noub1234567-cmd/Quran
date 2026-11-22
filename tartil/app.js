@@ -211,11 +211,12 @@
     try { blob = await new Response(raw.stream().pipeThrough(new CompressionStream('gzip'))).blob(); name += '.gz'; } catch (e) {}
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   }
+  let boost = false; try { boost = localStorage.getItem('tartil.boost') === '1'; } catch (e) {}
   let carry = null;   // مقطع قصير جدًا لم يُفهم: يُضمّ إلى المقطع التالي بدل إهماله
   async function handleSegment(samples) {
     if (carry) { const c = new Float32Array(carry.length + samples.length); c.set(carry); c.set(samples, carry.length); samples = c; carry = null; }
     const sec = samples.length / 16000;
-    const m = await runModel(new Float32Array(samples));
+    const m = await runModel(boost ? QuranLive.boostQuiet(samples) : new Float32Array(samples));
     const r = tracker.process(m.logp, m.T, m.V);
     dumpSegs.push({ T: m.T, V: m.V, sec, q: quant(m.logp) });
     if (r.status === 'short' && sec < 5) carry = samples;
@@ -292,6 +293,7 @@
     $('showPos').onchange = () => $('text').parentNode.classList.toggle('hidepos', !$('showPos').checked);
     $('text').onclick = (e) => { const t = e.target.closest('.w'); if (t) { if (t.classList.contains('memo')) { t.classList.add('rev'); paint(); } showDetail(+t.dataset.i); } };
     $('dumpBtn').onclick = exportDump;
+    $('boost').checked = boost; $('boost').onchange = () => { boost = $('boost').checked; try { localStorage.setItem('tartil.boost', boost ? '1' : '0'); } catch (e) {} };
     $('memo').checked = memo;
     $('memo').onchange = () => { memo = $('memo').checked; try { localStorage.setItem('tartil.memo', memo ? '1' : '0'); } catch (e) {} $('text').querySelectorAll('.w').forEach((x) => x.classList.remove('rev')); paint(); };
     $('mkClear').onclick = () => { if (confirm('مسح قائمة أخطائي؟')) { saveMK({}); showMistakes(); } };

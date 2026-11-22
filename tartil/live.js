@@ -207,5 +207,26 @@ registerProcessor('quran-pcm',P);`;
     };
   }
 
-  return { SR, createResampler, createSegmenter, start };
+  // تقوية الصوت الخافت: كسب موضعي يرفع المقاطع الأخفض كثيرًا من بقية المقطع (آخر الآية، نَفَس ضعيف) دون تضخيم الصمت
+  function boostQuiet(samples, maxGain) {
+    maxGain = maxGain || 6;
+    const F = 320, n = Math.floor(samples.length / F), out = new Float32Array(samples.length); out.set(samples);
+    if (n < 10) return out;
+    const rms = new Float32Array(n);
+    for (let f = 0; f < n; f++) { let s = 0; for (let i = f * F; i < f * F + F; i++) s += samples[i] * samples[i]; rms[f] = Math.sqrt(s / F); }
+    const sorted = Array.from(rms).sort((a, b) => a - b);
+    const floor = Math.max(1e-4, sorted[Math.floor(n * 0.1)]), top = sorted[Math.floor(n * 0.9)];
+    if (top < 3 * floor) return out;
+    const env = new Float32Array(n);                       // أعلى طاقة ضمن ±150ms كي لا يتذبذب الكسب داخل الكلمة
+    for (let f = 0; f < n; f++) { let m = 0; for (let k = Math.max(0, f - 8); k <= Math.min(n - 1, f + 8); k++) if (rms[k] > m) m = rms[k]; env[f] = m; }
+    const g = new Float32Array(n);
+    for (let f = 0; f < n; f++) g[f] = env[f] > 2.5 * floor ? Math.min(maxGain, Math.max(1, top / env[f])) : 1;
+    for (let f = 0; f < n; f++) {                          // تنعيم الكسب بين الإطارات
+      const g0 = g[f], g1 = f + 1 < n ? g[f + 1] : g0;
+      for (let i = 0; i < F; i++) { const v = samples[f * F + i] * (g0 + (g1 - g0) * i / F); out[f * F + i] = v > 1 ? 1 : v < -1 ? -1 : v; }
+    }
+    return out;
+  }
+
+  return { SR, createResampler, createSegmenter, boostQuiet, start };
 });
