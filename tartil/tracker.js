@@ -67,8 +67,11 @@
       if (!lost) m = locate(pass.syms, Math.max(0, cursor - o.back), Math.min(n, cursor + hyp.length * 2 + 30), hyp);
       if (!m || m.rate > o.maxLocateRate) m = locate(pass.syms, 0, n, hyp);   // lost: search the whole passage
       if (!m || m.rate > o.maxLocateRate || m.end - m.start < 3) { lost = 1; return { status: 'lost', flags: [] }; }
-      lost = 0;
-      const { start, end } = m, len = end - start;
+      const lost0 = lost; lost = 0;
+      // فجوة صغيرة بين نهاية ما سبق وبداية هذا المقطع: غالبًا كلمة أولى لم يتعرّف عليها المحاذي (مثل ع، م)؛ نمدّ البداية ليحكم الكاشف عليها بالصوت
+      let { start, end } = m;
+      if (!lost0 && cursor > 0 && start > cursor && start - cursor <= 10) start = cursor;
+      const len = end - start;
       const ref = { syms: pass.syms.slice(start, end), word: pass.word.slice(start, end), tags: pass.tags.slice(start, end), words: pass.words };
       let res;
       try { res = D.analyze(logp, T, V, ref, vocab, o.params); }
@@ -96,6 +99,8 @@
         let c = 0, sv = 0;
         for (let j = a; j <= b; j++) { c += covered[j]; if (sev[j] > sv) sv = sev[j]; }
         if (!c) return i < last ? 'skipped' : 'pending';
+        let d = 0; for (let j = a; j <= b; j++) { const f = flagAt.get(j); if (f && f.kind === 'del') d++; }
+        if (d === b - a + 1 && i < last) return 'skipped';   // كل أصوات الكلمة «لم تُسمع»
         if (c < b - a + 1) return 'partial';
         return sv === 2 ? 'error' : sv === 1 ? 'possible' : 'ok';
       });
