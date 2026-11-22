@@ -5,7 +5,7 @@
  *   const pass = TartilTracker.buildPassage(refData, sura, from, to);
  *   const tr = TartilTracker.create(pass, refData.vocab);
  *   const r = tr.process(logp, T, V);   // -> {status:'ok'|'lost'|'unreliable'|'short', start, end, flags}
- *   tr.wordStates()                     // per word: 'pending' | 'skipped' | 'partial' | 'ok' | 'possible' | 'error'
+ *   tr.wordStates()                     // per word: 'pending' | 'skipped' | 'unheard' | 'partial' | 'ok' | 'possible' | 'error'
  */
 (function (root, factory) {
   const api = factory(root.TartilDetect || (typeof require === 'function' ? require('./detect.js') : null));
@@ -67,15 +67,8 @@
       if (!lost) m = locate(pass.syms, Math.max(0, cursor - o.back), Math.min(n, cursor + hyp.length * 2 + 30), hyp);
       if (!m || m.rate > o.maxLocateRate) m = locate(pass.syms, 0, n, hyp);   // lost: search the whole passage
       if (!m || m.rate > o.maxLocateRate || m.end - m.start < 3) { lost = 1; return { status: 'lost', flags: [] }; }
-      const lost0 = lost; lost = 0;
-      // فجوة صغيرة بين نهاية ما سبق وبداية هذا المقطع: غالبًا كلمة أولى لم يتعرّف عليها المحاذي (مثل ع، م)؛ نمدّ البداية ليحكم الكاشف عليها بالصوت
-      let { start, end } = m;
-      if (!lost0 && start > 0 && !covered[start - 1]) {
-        let s = start; while (s > 0 && !covered[s - 1] && start - s < 10) s--;
-        while (s < start && s > 0 && pass.word[s] === pass.word[s - 1]) s++;   // لا نبدأ في منتصف كلمة: كلمات كاملة غير مغطّاة فقط
-        if (s < start) start = s;
-      }
-      const len = end - start;
+      lost = 0;
+      const { start, end } = m, len = end - start;
       const ref = { syms: pass.syms.slice(start, end), word: pass.word.slice(start, end), tags: pass.tags.slice(start, end), words: pass.words };
       let res;
       try { res = D.analyze(logp, T, V, ref, vocab, o.params); }
@@ -99,12 +92,16 @@
     function wordStates() {
       let last = -1;   // آخر كلمة غُطّي منها شيء: ما قبلها وغير مغطّى = أُسقط
       pass.wordRange.forEach(([a, b], i) => { for (let j = a; j <= b; j++) if (covered[j]) { last = i; break; } });
+      const unc = pass.wordRange.map(([a, b]) => { for (let j = a; j <= b; j++) if (covered[j]) return false; return true; });
       return pass.wordRange.map(([a, b], i) => {
         let c = 0, sv = 0;
         for (let j = a; j <= b; j++) { c += covered[j]; if (sev[j] > sv) sv = sev[j]; }
-        if (!c) return i < last ? 'skipped' : 'pending';
-        let d = 0; for (let j = a; j <= b; j++) { const f = flagAt.get(j); if (f && f.kind === 'del') d++; }
-        if (d === b - a + 1 && i < last) return 'skipped';   // كل أصوات الكلمة «لم تُسمع»
+        if (!c) {
+          if (i >= last) return 'pending';
+          // كلمة واحدة معزولة بين مقطعين غالبًا لم يلتقطها المحاذي عند الحافة: «لم تُسمع بوضوح»؛ كلمتان فأكثر متتاليتان: «أُسقطت»
+          let l = i, r = i; while (l > 0 && unc[l - 1]) l--; while (r < unc.length - 1 && unc[r + 1] && r + 1 < last) r++;
+          return r - l + 1 >= 2 ? 'skipped' : 'unheard';
+        }
         if (c < b - a + 1) return 'partial';
         return sv === 2 ? 'error' : sv === 1 ? 'possible' : 'ok';
       });
