@@ -201,10 +201,13 @@
 
   // ---------- segments ----------
   let segLog = [];
+  let carry = null;   // مقطع قصير جدًا لم يُفهم: يُضمّ إلى المقطع التالي بدل إهماله
   async function handleSegment(samples) {
+    if (carry) { const c = new Float32Array(carry.length + samples.length); c.set(carry); c.set(samples, carry.length); samples = c; carry = null; }
     const sec = samples.length / 16000;
     const m = await runModel(new Float32Array(samples));
     const r = tracker.process(m.logp, m.T, m.V);
+    if (r.status === 'short' && sec < 5) carry = samples;
     segCount++; procMs += m.ms; segLog.push({ sec, ms: m.ms, st: r.status, w0: r.status === 'ok' ? pass.word[r.start] : null, w1: r.status === 'ok' ? pass.word[r.end - 1] : null, ph: r.status === 'ok' ? r.end - r.start : 0 });
     const msg = { ok: 'حُلّل مقطع (' + sec.toFixed(1) + ' ث في ' + (m.ms / 1000).toFixed(1) + ' ث)', lost: 'لم أتعرّف على هذا المقطع ضمن الآيات المحددة', unreliable: 'المقطع غير واضح أو لا يطابق النص', short: 'مقطع قصير جدًا' }[r.status];
     setStatus(msg); paint();
@@ -214,7 +217,7 @@
 
   async function start() {
     if (running) return;
-    renderPassage(); segCount = 0; procMs = 0; segLog = []; hookWorker();
+    renderPassage(); segCount = 0; procMs = 0; segLog = []; carry = null; hookWorker();
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 } }); }
     catch (e) { setStatus('لا يمكن الوصول إلى الميكروفون: أعطِ الإذن من إعدادات المتصفح'); return; }
     try {
@@ -238,7 +241,7 @@
   // ---------- analyse a recorded file ----------
   async function analyseFile(file) {
     if (!modelReady) { setStatus('حمّل النموذج أولًا'); return; }
-    renderPassage(); hookWorker(); segCount = 0; procMs = 0; segLog = []; lock(true); $('go').disabled = true;
+    renderPassage(); hookWorker(); segCount = 0; procMs = 0; segLog = []; carry = null; lock(true); $('go').disabled = true;
     try {
       setStatus('جارٍ قراءة الملف…');
       const AC = window.AudioContext || window.webkitAudioContext, ac = new AC();
