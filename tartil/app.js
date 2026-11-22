@@ -114,7 +114,7 @@
     const st = tracker.wordStates(), seen = st.filter((x) => x !== 'pending').length;
     $('summary').innerHTML = '<p>غُطّيت ' + seen + ' كلمة من ' + st.length + ' — أخطاء حركات مؤكدة: <b>' + conf.length + '</b> — ملاحظات محتملة: ' + pos.length + '</p>' + (conf.length ? '' : '<p>لا أخطاء حركات مؤكدة. ما شاء الله.</p>');
     const aud = segLog.reduce((a, x) => a + x.sec, 0), tot = procMs / 1000;
-    if (segLog.length) $('summary').innerHTML += '<p dir="rtl" style="font-size:13px;color:var(--mut,#666)">⏱ ' + (sel + ' — ' + (mode === 'gpu' ? 'GPU' : 'المعالج')) + ': مدة الصوت <b>' + aud.toFixed(1) + ' ث</b>، زمن التحليل <b>' + tot.toFixed(1) + ' ث</b> (×' + (aud ? (tot / aud).toFixed(2) : '–') + ' من زمن الصوت)<br>المقاطع: ' + segLog.map((x, i) => (i + 1) + ') ' + x.sec.toFixed(1) + ' ث ← ' + (x.ms / 1000).toFixed(1) + ' ث').join(' · ') + '</p>';
+    if (segLog.length) $('summary').innerHTML += '<p dir="rtl" style="font-size:13px;color:var(--mut,#666)">⏱ ' + (sel + ' — ' + (mode === 'gpu' ? 'GPU' : 'المعالج')) + ': مدة الصوت <b>' + aud.toFixed(1) + ' ث</b>، زمن التحليل <b>' + tot.toFixed(1) + ' ث</b> (×' + (aud ? (tot / aud).toFixed(2) : '–') + ' من زمن الصوت)<br>المقاطع: ' + segLog.map((x, i) => (i + 1) + ') ' + x.sec.toFixed(1) + ' ث ← ' + (x.ms / 1000).toFixed(1) + ' ث' + (x.st === 'ok' ? ' [كلمات ' + (x.w0 + 1) + '–' + (x.w1 + 1) + ']' : ' [' + x.st + ']')).join(' · ') + '</p>';
     const sk = []; st.forEach((x, i) => { if (x !== 'skipped') return; const l = sk[sk.length - 1]; if (l && l.b === i - 1 && l.v === pass.wordVerse[i]) l.b = i; else sk.push({ a: i, b: i, v: pass.wordVerse[i] }); });
     const skN = sk.reduce((s, r) => s + r.b - r.a + 1, 0);
     if (skN) $('summary').innerHTML += '<p style="color:var(--err)"><b>كلمات أُسقطت: ' + skN + '</b></p>';
@@ -205,7 +205,7 @@
     const sec = samples.length / 16000;
     const m = await runModel(new Float32Array(samples));
     const r = tracker.process(m.logp, m.T, m.V);
-    segCount++; procMs += m.ms; segLog.push({ sec, ms: m.ms });
+    segCount++; procMs += m.ms; segLog.push({ sec, ms: m.ms, st: r.status, w0: r.status === 'ok' ? pass.word[r.start] : null, w1: r.status === 'ok' ? pass.word[r.end - 1] : null, ph: r.status === 'ok' ? r.end - r.start : 0 });
     const msg = { ok: 'حُلّل مقطع (' + sec.toFixed(1) + ' ث في ' + (m.ms / 1000).toFixed(1) + ' ث)', lost: 'لم أتعرّف على هذا المقطع ضمن الآيات المحددة', unreliable: 'المقطع غير واضح أو لا يطابق النص', short: 'مقطع قصير جدًا' }[r.status];
     setStatus(msg); paint();
     if (tracker.done && running) setTimeout(stop, 300);
