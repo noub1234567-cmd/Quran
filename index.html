@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0B4F4A">
+<meta name="theme-color" content="#2C2420">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <title>حفظ القرآن</title>
@@ -11,24 +11,30 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&family=Noto+Kufi+Arabic:wght@500;700&display=swap" rel="stylesheet">
 <style>
+  /* الهوية البرونزية: ألوان مستخرجة من أيقونة التطبيق */
   :root{
-    --bar:#0B4F4A;--em:#0B4F4A;--em-soft:#DDEADF;--em-line:#C5D8CD;--accent:#0B4F4A;
-    --ivory:#F6F1E3;--paper:#FFFDF7;--task:#F2EEDD;--field:#FFFFFF;
-    --ink:#18332F;--mute:#5A6F69;--line:#E4DCC6;--line2:#D6CCAE;
-    --gold:#B8943A;--gold-ink:#8A6A1C;--gold-soft:#F4E5AE;
-    --red:#A8372C;--red-soft:#F6DEDA;--ok-bg:#DDEBD9;--ok-ink:#1E5B33;
-    --on-em:#F6F1E3;
+    --bar:#2C2420;--bar-title:#E3C1A8;--on-bar:#F5EFEA;
+    --em:#A67858;--btn:#9A6C4D;--on-btn:#FFFFFF;
+    --em-soft:#EBDDD0;--em-line:#D9C8B8;--accent:#8A5F44;
+    --ivory:#FAF7F4;--paper:#F2ECE6;--task:#EBE2D9;--field:#FFFCF9;
+    --ink:#231D1A;--mute:#6E625B;--line:#E2D9D0;--line2:#D8CCC1;
+    --gold:#C89B7B;--gold-ink:#9E7356;--gold-soft:#F0DCCB;
+    --red:#B84A4A;--red-soft:#F3DCDC;--err:#B84A4A;
+    --ok-bg:#DCEBE2;--ok-ink:#2F6A4F;--warn-soft:#F7E8CF;
   }
   body.dark{
-    --bar:#08332F;--em:#0F6A60;--em-soft:#1D3A37;--em-line:#2C4B47;--accent:#8EDACB;
-    --ivory:#0C1F1D;--paper:#122B28;--task:#17332F;--field:#0E2220;
-    --ink:#E9EFE2;--mute:#9DB6AE;--line:#25423E;--line2:#2C4B47;
-    --gold:#D9B65A;--gold-ink:#E0BF6A;--gold-soft:#4A3F1C;
-    --red:#E39A90;--red-soft:#432522;--ok-bg:#1B3D2B;--ok-ink:#9ADFB1;
+    --bar:#241E1B;--bar-title:#E3C1A8;--on-bar:#F5EFEA;
+    --em:#C89B7B;--btn:#C89B7B;--on-btn:#1C1715;
+    --em-soft:#3D3530;--em-line:#4A3F38;--accent:#E3C1A8;
+    --ivory:#1C1715;--paper:#2C2420;--task:#352C27;--field:#3D3530;
+    --ink:#F5EFEA;--mute:#A89B93;--line:#3E3530;--line2:#4A3F38;
+    --gold:#C89B7B;--gold-ink:#E3C1A8;--gold-soft:#4C3D33;
+    --red:#E88B8B;--red-soft:#432A2A;--err:#B84A4A;
+    --ok-bg:#1F3A2E;--ok-ink:#7CC9A3;--warn-soft:#4A3B22;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:system-ui,"Segoe UI",Tahoma,sans-serif;background:var(--ivory);color:var(--ink);padding-bottom:90px}
-  header{background-color:var(--bar);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cg fill='none' stroke='%23D9B65A' stroke-opacity='.22'%3E%3Crect x='10' y='10' width='28' height='28'/%3E%3Crect x='10' y='10' width='28' height='28' transform='rotate(45 24 24)'/%3E%3C/g%3E%3C/svg%3E");background-position:center;color:var(--on-em);padding:18px 16px 16px;text-align:center;font-family:'Noto Kufi Arabic',system-ui,sans-serif;font-size:20px;font-weight:700;border-bottom:3px solid var(--gold)}
+  header{background-color:var(--bar);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cg fill='none' stroke='%23C89B7B' stroke-opacity='.2'%3E%3Crect x='10' y='10' width='28' height='28'/%3E%3Crect x='10' y='10' width='28' height='28' transform='rotate(45 24 24)'/%3E%3C/g%3E%3C/svg%3E");background-position:center;color:var(--bar-title);padding:18px 16px 16px;text-align:center;font-family:'Noto Kufi Arabic',system-ui,sans-serif;font-size:20px;font-weight:700;border-bottom:3px solid var(--gold)}
   header::before,header::after{content:"\06DE";color:var(--gold);font-family:'Amiri Quran',serif;font-weight:400;margin:0 10px}
   .card{background:var(--paper);margin:12px;padding:16px;border-radius:18px;border:1px solid var(--line)}
   .card h2{margin:0 0 12px;font-family:'Noto Kufi Arabic',system-ui,sans-serif;font-size:16px;font-weight:700;line-height:1.5;color:var(--accent);padding-inline-start:10px;border-inline-start:4px solid var(--gold)}
@@ -40,7 +46,7 @@
   button:active{transform:translateY(1px)}
   button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   button:disabled{opacity:.5}
-  .primary{background:var(--em);color:var(--on-em);width:100%;margin-top:12px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.2)}
+  .primary{background:var(--btn);color:var(--on-btn);width:100%;margin-top:12px;font-weight:700;box-shadow:0 2px 0 rgba(0,0,0,.2)}
   .alt{flex:1;background:var(--em-soft);color:var(--accent);border:1px solid var(--em-line)}
   .hint{font-size:12px;color:var(--mute);margin:8px 0 0;line-height:1.7}
   .list{margin:12px}
@@ -51,18 +57,18 @@
   .item .num::after{transform:rotate(45deg)}
   .item .mem{background:none;font-size:22px;padding:6px 8px;color:var(--gold)}
   .item .dl{background:var(--em-soft);color:var(--accent);margin:6px;padding:8px 10px;font-size:13px;border-radius:10px;border:1px solid var(--em-line)}
-  .item .dl.done{background:var(--em);color:var(--on-em);border-color:var(--em)}
+  .item .dl.done{background:var(--btn);color:var(--on-btn);border-color:var(--btn)}
   .item .rdel{background:var(--red-soft);color:var(--red);margin:6px;padding:8px 10px;font-size:13px;border-radius:10px}
-  #bar{position:fixed;bottom:0;left:0;right:0;background:var(--bar);color:var(--on-em);padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:10px;border-top:2px solid var(--gold)}
+  #bar{position:fixed;bottom:0;left:0;right:0;background:var(--bar);color:var(--on-bar);padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:10px;border-top:2px solid var(--gold)}
   #status{flex:1;font-size:14px}
-  #stop{background:#B5473B;color:#fff;padding:8px 16px}
+  #stop{background:var(--err);color:#fff;padding:8px 16px}
   #note{font-size:12px;color:var(--mute);margin:12px;text-align:center}
   .tabs{display:flex;background:var(--bar);overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .tabs button{flex:0 0 auto;background:none;color:rgba(246,241,227,.72);border-radius:0;padding:12px 15px;font-family:'Noto Kufi Arabic',system-ui,sans-serif;font-size:14px;font-weight:500;white-space:nowrap;border-bottom:3px solid transparent}
-  .tabs button.on{color:#F6F1E3;font-weight:700;border-bottom-color:var(--gold);background:rgba(255,255,255,.07)}
+  .tabs button{flex:0 0 auto;background:none;color:rgba(245,239,234,.72);border-radius:0;padding:12px 15px;font-family:'Noto Kufi Arabic',system-ui,sans-serif;font-size:14px;font-weight:500;white-space:nowrap;border-bottom:3px solid transparent}
+  .tabs button.on{color:var(--bar-title);font-weight:700;border-bottom-color:var(--gold);background:rgba(255,255,255,.07)}
   .quranText{font-family:'Amiri Quran','Amiri','Scheherazade New',serif;font-size:var(--qfs,26px);line-height:2.3;text-align:right;position:relative;max-height:45vh;overflow:auto;padding:8px 10px;background:var(--ivory);border:1px solid var(--line);border-radius:14px}
   .ay{border-radius:8px;padding:2px 3px}
-  .ay.cur{background:var(--gold-soft);box-shadow:inset 0 -2px 0 var(--gold)}
+  .ay.cur{background:var(--gold-soft);box-shadow:inset 0 -2px 0 var(--gold-ink)}
   .mk{color:var(--gold-ink);font-size:20px}
   .bsm{text-align:center;color:var(--accent);font-size:28px;margin-bottom:4px}
   #ayahBox[data-mode=cur] .bsm{display:none}
@@ -75,11 +81,11 @@
   .bad{background:var(--red-soft);color:var(--red);border-color:transparent}
   [hidden]{display:none!important}
   .bar{height:10px;background:var(--line);border-radius:6px;overflow:hidden;margin:6px 0 10px}
-  .bar i{display:block;height:100%;background:var(--em)}
+  .bar i{display:block;height:100%;background:var(--btn)}
   .chart{display:flex;align-items:flex-end;gap:4px;height:80px;margin:8px 0}
   .chart div{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:1px;height:100%}
   .chart b{display:block;width:45%;border-radius:3px 3px 0 0;min-height:0}
-  .chart .n{background:var(--em)}.chart .r{background:var(--gold)}
+  .chart .n{background:var(--btn)}.chart .r{background:var(--gold)}
   .legend{font-size:12px;color:var(--mute)}
   .task{background:var(--task);border-radius:14px;padding:12px;margin-bottom:10px}
   .rv{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line2)}
@@ -88,9 +94,9 @@
   .hzrow{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--line)}
   .hzt{flex:1;font-size:14px}.hzt small{color:var(--mute);display:block}
   .hzrow button{flex:none;padding:8px 10px;font-size:14px;min-width:38px}
-  .alt.on,.hzrow .on{background:var(--em);color:var(--on-em);border-color:var(--em)}
+  .alt.on,.hzrow .on{background:var(--btn);color:var(--on-btn);border-color:var(--btn)}
   details summary{cursor:pointer;color:var(--accent);font-weight:700;padding:6px 0}
-  .tip{background:var(--gold-soft);color:var(--ink);border-radius:12px;padding:10px;font-size:13px;margin-bottom:10px}
+  .tip{background:var(--warn-soft);color:var(--ink);border-radius:12px;padding:10px;font-size:13px;margin-bottom:10px}
   /* بطاقات قابلة للطيّ */
   details.fold{padding:0}
   details.fold>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;font-family:'Noto Kufi Arabic',system-ui,sans-serif;font-size:16px;font-weight:700;color:var(--accent)}
@@ -1630,7 +1636,7 @@ function renderStats(){
     h+=`<div>آيات حفظتها في الخطة: <b>${ay}</b> · مهام مراجعة أنجزتها: <b>${rv}</b></div>`;
     const data=lastDaysData(plan,14,t),mx=Math.max(1,...data.map(x=>Math.max(x.n,x.r)));
     h+='<div class="chart">'+data.map(x=>`<div title="${x.d}"><b class="n" style="height:${(x.n/mx*100).toFixed(0)}%"></b><b class="r" style="height:${(x.r/mx*100).toFixed(0)}%"></b></div>`).join('')+'</div>';
-    h+='<div class="legend">آخر 14 يوماً: <span style="color:var(--em)">■</span> آيات جديدة · <span style="color:var(--gold)">■</span> مهام مراجعة</div>';
+    h+='<div class="legend">آخر 14 يوماً: <span style="color:var(--btn)">■</span> آيات جديدة · <span style="color:var(--gold)">■</span> مهام مراجعة</div>';
   }else h+='<p class="hint">احفظ خطة من تبويب «الخطة» لتظهر إحصاءات التقدم اليومي.</p>';
   const ents=Object.entries(stats||{});
   const ok=ents.reduce((x,e)=>x+e[1].ok,0),bad=ents.reduce((x,e)=>x+e[1].bad,0);
@@ -1648,7 +1654,7 @@ function applyTheme(){
   let dark=cfg.theme==='dark';
   if(cfg.theme==='auto'){try{dark=!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);}catch(e){}}
   document.body.classList.toggle('dark',dark);
-  const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',dark?'#08332F':'#0B4F4A');
+  const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',dark?'#241E1B':'#2C2420');
   document.documentElement.style.setProperty('--qfs',(cfg.fs||26)+'px');
   $('fsVal').textContent=String(cfg.fs||26);
 }
